@@ -42,9 +42,9 @@ jobs:
 
     - name: Check Python syntax
       run: |
-        python -m py_compile trip_finder.py
-        python -m py_compile trip_finder_roundtrip.py
-        python -m py_compile google_flights_scraper.py
+        python -m py_compile trip_finder/trip_finder.py
+        python -m py_compile trip_finder/trip_finder_roundtrip.py
+        python -m py_compile trip_finder/google_flights_scraper.py
 
     - name: Verify imports
       run: |
