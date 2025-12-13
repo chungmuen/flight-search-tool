@@ -1,3 +1,5 @@
+![CI](https://github.com/YOUR_USERNAME/flight-search-tool/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/flight-search-tool/actions/workflows/ci.yml)
+
 # Flight Search Tool
 
 Automated tool to find the cheapest multi-segment flight combinations with two stopovers. Supports **any route** (e.g., London → Hong Kong → Taiwan → London, NYC → Dubai → Singapore → NYC, etc.).
