@@ -58,9 +58,9 @@ jobs:
 
     - name: Check script help commands
       run: |
-        python trip_finder.py --help
-        python trip_finder_roundtrip.py --help
-        python google_flights_scraper.py --help || true
+        python trip_finder/trip_finder.py --help
+        python trip_finder/trip_finder_roundtrip.py --help
+        python trip_finder/google_flights_scraper.py --help || true
 
     - name: Run unit tests
       run: |
