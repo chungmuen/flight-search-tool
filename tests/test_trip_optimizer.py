@@ -5,14 +5,9 @@ Unit tests for TripOptimizer
 
 import unittest
 from datetime import datetime
-import sys
-import os
 
-# Add parent directory to path for imports
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from trip_finder import TripOptimizer
-from google_flights_scraper import Flight
+from trip_finder.trip_finder import TripOptimizer
+from trip_finder.google_flights_scraper import Flight
 
 
 class TestTripOptimizer(unittest.TestCase):

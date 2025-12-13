@@ -13,7 +13,10 @@ from datetime import datetime, timedelta
 from itertools import product
 from typing import List, Tuple, Optional
 app = typer.Typer(help="Find optimal round-trip flight combinations (often cheaper than one-ways)")
-from google_flights_scraper import GoogleFlightsScraper, RoundTripFlight
+try:
+    from .google_flights_scraper import GoogleFlightsScraper, RoundTripFlight
+except ImportError:
+    from google_flights_scraper import GoogleFlightsScraper, RoundTripFlight
 
 
 class RoundTripOptimizer:

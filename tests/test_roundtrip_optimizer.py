@@ -4,14 +4,9 @@ Unit tests for RoundTripOptimizer
 """
 
 import unittest
-import sys
-import os
 
-# Add parent directory to path for imports
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from trip_finder_roundtrip import RoundTripOptimizer
-from google_flights_scraper import RoundTripFlight
+from trip_finder.trip_finder_roundtrip import RoundTripOptimizer
+from trip_finder.google_flights_scraper import RoundTripFlight
 
 
 class TestRoundTripOptimizer(unittest.TestCase):

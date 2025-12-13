@@ -5,7 +5,7 @@ Unit tests for GoogleFlightsScraper
 
 import unittest
 from datetime import datetime
-from google_flights_scraper import GoogleFlightsScraper, Flight, RoundTripFlight
+from trip_finder.google_flights_scraper import GoogleFlightsScraper, Flight, RoundTripFlight
 
 
 class TestGoogleFlightsScraper(unittest.TestCase):

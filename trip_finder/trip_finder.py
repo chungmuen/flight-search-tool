@@ -10,7 +10,10 @@ import typer
 from datetime import datetime, timedelta
 from itertools import product
 from typing import List, Tuple, Optional
-from google_flights_scraper import GoogleFlightsScraper, Flight
+try:
+    from .google_flights_scraper import GoogleFlightsScraper, Flight
+except ImportError:
+    from google_flights_scraper import GoogleFlightsScraper, Flight
 
 app = typer.Typer(help="Find optimal multi-segment flight combinations")
 
