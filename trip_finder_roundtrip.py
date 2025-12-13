@@ -8,10 +8,11 @@ Searches for 2 round trips instead of 4 one-way flights (often cheaper)
 
 import asyncio
 import json
-import argparse
+import typer
 from datetime import datetime, timedelta
 from itertools import product
-from typing import List, Tuple
+from typing import List, Tuple, Optional
+app = typer.Typer(help="Find optimal round-trip flight combinations (often cheaper than one-ways)")
 from google_flights_scraper import GoogleFlightsScraper, RoundTripFlight
 
 
@@ -94,141 +95,118 @@ class RoundTripOptimizer:
         return valid_combos[:top_n]
 
 
-def parse_args():
-    """Parse command-line arguments"""
-    parser = argparse.ArgumentParser(
-        description="Find optimal round-trip flight combinations (often cheaper than one-ways)",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # London ↔ Hong Kong + Hong Kong ↔ Taiwan
-  python trip_finder_roundtrip.py --origins LHR --stopover1 HKG --stopover2 TPE \\
-    --rt1-outbound 2026-02-05 --rt1-return 2026-02-26 \\
-    --rt2-outbound 2026-02-10 --rt2-return 2026-02-21
 
-  # Multiple airports and dates
-  python trip_finder_roundtrip.py --origins LHR,LGW --stopover1 HKG,MFM --stopover2 TPE,KHH \\
-    --rt1-outbound-dates 2026-02-05,2026-02-06 --rt1-return-dates 2026-02-25,2026-02-26 \\
-    --rt2-outbound-dates 2026-02-10,2026-02-11 --rt2-return-dates 2026-02-20,2026-02-21
-
-  # NYC ↔ Dubai + Dubai ↔ Singapore
-  python trip_finder_roundtrip.py --origins JFK --stopover1 DXB --stopover2 SIN \\
-    --rt1-outbound 2026-03-01 --rt1-return 2026-03-17 \\
-    --rt2-outbound 2026-03-05 --rt2-return 2026-03-13 \\
-    --min-stopover1-days 3 --min-stopover2-days 7
-        """)
-
-    # Airport parameters
-    parser.add_argument('--origins', type=str, required=True,
-                       help='Comma-separated list of origin airport codes (e.g., LHR,LGW)')
-    parser.add_argument('--stopover1', type=str, required=True,
-                       help='Comma-separated list of first stopover airport codes (e.g., HKG,MFM)')
-    parser.add_argument('--stopover2', type=str, required=True,
-                       help='Comma-separated list of second stopover airport codes (e.g., TPE,KHH)')
-
-    # Round trip 1 dates (Origin ↔ Stopover 1)
-    parser.add_argument('--rt1-outbound', type=str,
-                       help='Single outbound date for RT1 (YYYY-MM-DD). Use this OR --rt1-outbound-dates')
-    parser.add_argument('--rt1-return', type=str,
-                       help='Single return date for RT1 (YYYY-MM-DD). Use this OR --rt1-return-dates')
-    parser.add_argument('--rt1-outbound-dates', type=str,
-                       help='Multiple outbound dates for RT1 (comma-separated, e.g., 2026-02-05,2026-02-06)')
-    parser.add_argument('--rt1-return-dates', type=str,
-                       help='Multiple return dates for RT1 (comma-separated)')
-
-    # Round trip 2 dates (Stopover 1 ↔ Stopover 2)
-    parser.add_argument('--rt2-outbound', type=str,
-                       help='Single outbound date for RT2 (YYYY-MM-DD). Use this OR --rt2-outbound-dates')
-    parser.add_argument('--rt2-return', type=str,
-                       help='Single return date for RT2 (YYYY-MM-DD). Use this OR --rt2-return-dates')
-    parser.add_argument('--rt2-outbound-dates', type=str,
-                       help='Multiple outbound dates for RT2 (comma-separated)')
-    parser.add_argument('--rt2-return-dates', type=str,
-                       help='Multiple return dates for RT2 (comma-separated)')
-
-    # Constraint parameters
-    parser.add_argument('--min-stopover1-days', type=int, default=4,
-                       help='Minimum days at first stopover (default: 4)')
-    parser.add_argument('--min-stopover2-days', type=int, default=10,
-                       help='Minimum days at second stopover (default: 10)')
-
-    # Output parameters
-    parser.add_argument('--top-n', type=int, default=10,
-                       help='Number of top results to return (default: 10)')
-    parser.add_argument('--output', type=str, default='trip_results_roundtrip.json',
-                       help='Output JSON file (default: trip_results_roundtrip.json)')
-
-    # Scraper parameters
-    parser.add_argument('--headless', action='store_true', default=True,
-                       help='Run browser in headless mode (default: True)')
-    parser.add_argument('--delay', type=int, default=2,
-                       help='Delay between requests in seconds (default: 2)')
-
-    return parser.parse_args()
+@app.command()
+def search(
+    origins: str = typer.Option(..., "--origins", help="Comma-separated list of origin airport codes"),
+    stopover1: str = typer.Option(..., "--stopover1", help="Comma-separated list of first stopover airport codes"),
+    stopover2: str = typer.Option(..., "--stopover2", help="Comma-separated list of second stopover airport codes"),
+    rt1_outbound: Optional[str] = typer.Option(None, "--rt1-outbound", help="Single outbound date for RT1 (YYYY-MM-DD)"),
+    rt1_return: Optional[str] = typer.Option(None, "--rt1-return", help="Single return date for RT1 (YYYY-MM-DD)"),
+    rt1_outbound_dates: Optional[str] = typer.Option(None, "--rt1-outbound-dates", help="Multiple outbound dates for RT1 (comma-separated)"),
+    rt1_return_dates: Optional[str] = typer.Option(None, "--rt1-return-dates", help="Multiple return dates for RT1 (comma-separated)"),
+    rt2_outbound: Optional[str] = typer.Option(None, "--rt2-outbound", help="Single outbound date for RT2 (YYYY-MM-DD)"),
+    rt2_return: Optional[str] = typer.Option(None, "--rt2-return", help="Single return date for RT2 (YYYY-MM-DD)"),
+    rt2_outbound_dates: Optional[str] = typer.Option(None, "--rt2-outbound-dates", help="Multiple outbound dates for RT2 (comma-separated)"),
+    rt2_return_dates: Optional[str] = typer.Option(None, "--rt2-return-dates", help="Multiple return dates for RT2 (comma-separated)"),
+    min_stopover1_days: int = typer.Option(4, "--min-stopover1-days", help="Minimum days at first stopover"),
+    min_stopover2_days: int = typer.Option(10, "--min-stopover2-days", help="Minimum days at second stopover"),
+    top_n: int = typer.Option(10, "--top-n", help="Number of top results to return"),
+    output: str = typer.Option("trip_results_roundtrip.json", "--output", help="Output JSON file"),
+    headless: bool = typer.Option(True, "--headless/--no-headless", help="Run browser in headless mode"),
+    delay: int = typer.Option(2, "--delay", help="Delay between requests in seconds")
+):
+    """
+    Find optimal round-trip flight combinations.
+    
+    \b
+    Examples:
+      # London ↔ Hong Kong + Hong Kong ↔ Taiwan
+      python trip_finder_roundtrip.py --origins LHR --stopover1 HKG --stopover2 TPE \\
+        --rt1-outbound 2026-02-05 --rt1-return 2026-02-26 \\
+        --rt2-outbound 2026-02-10 --rt2-return 2026-02-21
+      
+      # NYC ↔ Dubai + Dubai ↔ Singapore
+      python trip_finder_roundtrip.py --origins JFK --stopover1 DXB --stopover2 SIN \\
+        --rt1-outbound 2026-03-01 --rt1-return 2026-03-17 \\
+        --rt2-outbound 2026-03-05 --rt2-return 2026-03-13
+    """
+    asyncio.run(run_search(
+        origins, stopover1, stopover2,
+        rt1_outbound, rt1_return, rt1_outbound_dates, rt1_return_dates,
+        rt2_outbound, rt2_return, rt2_outbound_dates, rt2_return_dates,
+        min_stopover1_days, min_stopover2_days,
+        top_n, output, headless, delay
+    ))
 
 
-async def main():
-    """Main execution - search round-trip flights and find optimal combinations"""
-
-    # Parse arguments
-    args = parse_args()
-
+async def run_search(
+    origins: str, stopover1: str, stopover2: str,
+    rt1_outbound: Optional[str], rt1_return: Optional[str],
+    rt1_outbound_dates: Optional[str], rt1_return_dates: Optional[str],
+    rt2_outbound: Optional[str], rt2_return: Optional[str],
+    rt2_outbound_dates: Optional[str], rt2_return_dates: Optional[str],
+    min_stopover1_days: int, min_stopover2_days: int,
+    top_n: int, output: str, headless: bool, delay: int
+):
+    """Async function to perform round-trip search and optimization"""
+    
     # Parse airports
-    origins = [a.strip().upper() for a in args.origins.split(',')]
-    stopover1_airports = [a.strip().upper() for a in args.stopover1.split(',')]
-    stopover2_airports = [a.strip().upper() for a in args.stopover2.split(',')]
+    origins_list = [a.strip().upper() for a in origins.split(',')]
+    stopover1_airports = [a.strip().upper() for a in stopover1.split(',')]
+    stopover2_airports = [a.strip().upper() for a in stopover2.split(',')]
 
     # Parse dates for RT1
-    if args.rt1_outbound:
-        rt1_outbound_dates = [args.rt1_outbound]
-    elif args.rt1_outbound_dates:
-        rt1_outbound_dates = [d.strip() for d in args.rt1_outbound_dates.split(',')]
+    if rt1_outbound:
+        rt1_outbound_date_list = [rt1_outbound]
+    elif rt1_outbound_dates:
+        rt1_outbound_date_list = [d.strip() for d in rt1_outbound_dates.split(',')]
     else:
-        rt1_outbound_dates = ["2026-02-05"]  # Default
+        rt1_outbound_date_list = ["2026-02-05"]
 
-    if args.rt1_return:
-        rt1_return_dates = [args.rt1_return]
-    elif args.rt1_return_dates:
-        rt1_return_dates = [d.strip() for d in args.rt1_return_dates.split(',')]
+    if rt1_return:
+        rt1_return_date_list = [rt1_return]
+    elif rt1_return_dates:
+        rt1_return_date_list = [d.strip() for d in rt1_return_dates.split(',')]
     else:
-        rt1_return_dates = ["2026-02-26"]  # Default
+        rt1_return_date_list = ["2026-02-26"]
 
     # Parse dates for RT2
-    if args.rt2_outbound:
-        rt2_outbound_dates = [args.rt2_outbound]
-    elif args.rt2_outbound_dates:
-        rt2_outbound_dates = [d.strip() for d in args.rt2_outbound_dates.split(',')]
+    if rt2_outbound:
+        rt2_outbound_date_list = [rt2_outbound]
+    elif rt2_outbound_dates:
+        rt2_outbound_date_list = [d.strip() for d in rt2_outbound_dates.split(',')]
     else:
-        rt2_outbound_dates = ["2026-02-10"]  # Default
+        rt2_outbound_date_list = ["2026-02-10"]
 
-    if args.rt2_return:
-        rt2_return_dates = [args.rt2_return]
-    elif args.rt2_return_dates:
-        rt2_return_dates = [d.strip() for d in args.rt2_return_dates.split(',')]
+    if rt2_return:
+        rt2_return_date_list = [rt2_return]
+    elif rt2_return_dates:
+        rt2_return_date_list = [d.strip() for d in rt2_return_dates.split(',')]
     else:
-        rt2_return_dates = ["2026-02-21"]  # Default
+        rt2_return_date_list = ["2026-02-21"]
 
     print("=" * 80)
     print("ROUND-TRIP FLIGHT FINDER: Multi-Segment Route Optimization")
     print("=" * 80)
     print(f"\nRoute:")
-    print(f"  Round Trip 1: {','.join(origins)} ↔ {','.join(stopover1_airports)}")
+    print(f"  Round Trip 1: {','.join(origins_list)} ↔ {','.join(stopover1_airports)}")
     print(f"  Round Trip 2: {','.join(stopover1_airports)} ↔ {','.join(stopover2_airports)}")
     print(f"\nConstraints:")
-    print(f"  - Minimum {args.min_stopover1_days} days at stopover 1")
-    print(f"  - Minimum {args.min_stopover2_days} days at stopover 2")
+    print(f"  - Minimum {min_stopover1_days} days at stopover 1")
+    print(f"  - Minimum {min_stopover2_days} days at stopover 2")
     print(f"\nSearch Strategy:")
     print(f"  - Searching round-trip fares (often cheaper than one-ways)")
     print()
 
     # Initialize optimizer
     optimizer = RoundTripOptimizer(
-        min_stopover1_days=args.min_stopover1_days,
-        min_stopover2_days=args.min_stopover2_days
+        min_stopover1_days=min_stopover1_days,
+        min_stopover2_days=min_stopover2_days
     )
 
     # Create scraper
-    async with GoogleFlightsScraper(headless=args.headless, delay=args.delay) as scraper:
+    async with GoogleFlightsScraper(headless=headless, delay=delay) as scraper:
 
         # Round Trip 1: Origin ↔ Stopover 1
         print("\n" + "=" * 80)
@@ -236,16 +214,15 @@ async def main():
         print("=" * 80)
         rt1_roundtrips = []
 
-        for origin in origins:
-            for stopover1 in stopover1_airports:
-                for outbound_date in rt1_outbound_dates:
-                    for return_date in rt1_return_dates:
-                        # Only search if return is after outbound
+        for origin in origins_list:
+            for stopover1_airport in stopover1_airports:
+                for outbound_date in rt1_outbound_date_list:
+                    for return_date in rt1_return_date_list:
                         if return_date > outbound_date:
-                            print(f"\nSearching {origin} ↔ {stopover1}")
+                            print(f"\nSearching {origin} ↔ {stopover1_airport}")
                             print(f"  Out: {outbound_date}, Return: {return_date}")
                             roundtrips = await scraper.search_roundtrip(
-                                origin, stopover1, outbound_date, return_date
+                                origin, stopover1_airport, outbound_date, return_date
                             )
                             rt1_roundtrips.extend(roundtrips)
                             print(f"  Found {len(roundtrips)} round-trip options")
@@ -258,16 +235,15 @@ async def main():
         print("=" * 80)
         rt2_roundtrips = []
 
-        for stopover1 in stopover1_airports:
-            for stopover2 in stopover2_airports:
-                for outbound_date in rt2_outbound_dates:
-                    for return_date in rt2_return_dates:
-                        # Only search if return is after outbound
+        for stopover1_airport in stopover1_airports:
+            for stopover2_airport in stopover2_airports:
+                for outbound_date in rt2_outbound_date_list:
+                    for return_date in rt2_return_date_list:
                         if return_date > outbound_date:
-                            print(f"\nSearching {stopover1} ↔ {stopover2}")
+                            print(f"\nSearching {stopover1_airport} ↔ {stopover2_airport}")
                             print(f"  Out: {outbound_date}, Return: {return_date}")
                             roundtrips = await scraper.search_roundtrip(
-                                stopover1, stopover2, outbound_date, return_date
+                                stopover1_airport, stopover2_airport, outbound_date, return_date
                             )
                             rt2_roundtrips.extend(roundtrips)
                             print(f"  Found {len(roundtrips)} round-trip options")
@@ -285,7 +261,7 @@ async def main():
         return
 
     best_combos = optimizer.find_best_combinations(
-        rt1_roundtrips, rt2_roundtrips, top_n=args.top_n
+        rt1_roundtrips, rt2_roundtrips, top_n=top_n
     )
 
     # Display results
@@ -402,13 +378,13 @@ async def main():
             }
         })
 
-    with open(args.output, "w") as f:
+    with open(output, "w") as f:
         json.dump(results, f, indent=2)
 
     print(f"\n\n{'='*80}")
-    print(f"✓ Results saved to {args.output}")
+    print(f"✓ Results saved to {output}")
     print("=" * 80)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    app()

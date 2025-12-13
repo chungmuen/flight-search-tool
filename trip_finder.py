@@ -6,11 +6,13 @@ Combines Google Flights scraper with trip optimization to find best multi-segmen
 
 import asyncio
 import json
-import argparse
+import typer
 from datetime import datetime, timedelta
 from itertools import product
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 from google_flights_scraper import GoogleFlightsScraper, Flight
+
+app = typer.Typer(help="Find optimal multi-segment flight combinations")
 
 
 class TripOptimizer:
@@ -74,89 +76,71 @@ class TripOptimizer:
         return valid_combos[:top_n]
 
 
-def parse_args():
-    """Parse command-line arguments"""
-    parser = argparse.ArgumentParser(
-        description="Find optimal multi-segment flight combinations",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # London -> Hong Kong -> Taiwan -> Hong Kong -> London (test mode)
-  python trip_finder.py --origins LHR --stopover1 HKG --stopover2 TPE
-
-  # Multiple airports for each location
-  python trip_finder.py --origins LHR,LGW --stopover1 HKG,MFM --stopover2 TPE,KHH \\
-    --seg1-dates 2026-02-05,2026-02-07 --seg2-dates 2026-02-10,2026-02-12
-
-  # New York -> Dubai -> Singapore -> Dubai -> New York
-  python trip_finder.py --origins JFK,EWR --stopover1 DXB --stopover2 SIN \\
-    --min-stopover1-days 3 --min-stopover2-days 7
-        """)
-
-    # Airport parameters
-    parser.add_argument('--origins', type=str, required=True,
-                       help='Comma-separated list of origin airport codes (e.g., LHR,LGW)')
-    parser.add_argument('--stopover1', type=str, required=True,
-                       help='Comma-separated list of first stopover airport codes (e.g., HKG,MFM)')
-    parser.add_argument('--stopover2', type=str, required=True,
-                       help='Comma-separated list of second stopover airport codes (e.g., TPE,KHH)')
-
-    # Date range parameters
-    parser.add_argument('--seg1-dates', type=str, default='2026-02-05,2026-02-05',
-                       help='Date range for segment 1 (origin->stopover1) as START,END (default: 2026-02-05,2026-02-05)')
-    parser.add_argument('--seg2-dates', type=str, default='2026-02-10,2026-02-10',
-                       help='Date range for segment 2 (stopover1->stopover2) as START,END (default: 2026-02-10,2026-02-10)')
-    parser.add_argument('--seg3-dates', type=str, default='2026-02-21,2026-02-21',
-                       help='Date range for segment 3 (stopover2->stopover1) as START,END (default: 2026-02-21,2026-02-21)')
-    parser.add_argument('--seg4-dates', type=str, default='2026-02-26,2026-02-26',
-                       help='Date range for segment 4 (stopover1->origin) as START,END (default: 2026-02-26,2026-02-26)')
-
-    # Constraint parameters
-    parser.add_argument('--min-stopover1-days', type=int, default=4,
-                       help='Minimum days at first stopover (default: 4)')
-    parser.add_argument('--min-stopover2-days', type=int, default=10,
-                       help='Minimum days at second stopover (default: 10)')
-
-    # Output parameters
-    parser.add_argument('--top-n', type=int, default=10,
-                       help='Number of top results to return (default: 10)')
-    parser.add_argument('--output', type=str, default='trip_results.json',
-                       help='Output JSON file (default: trip_results.json)')
-
-    # Scraper parameters
-    parser.add_argument('--headless', action='store_true', default=True,
-                       help='Run browser in headless mode (default: True)')
-    parser.add_argument('--delay', type=int, default=2,
-                       help='Delay between requests in seconds (default: 2)')
-
-    return parser.parse_args()
+@app.command()
+def search(
+    origins: str = typer.Option(..., "--origins", help="Comma-separated list of origin airport codes (e.g., LHR,LGW)"),
+    stopover1: str = typer.Option(..., "--stopover1", help="Comma-separated list of first stopover airport codes (e.g., HKG,MFM)"),
+    stopover2: str = typer.Option(..., "--stopover2", help="Comma-separated list of second stopover airport codes (e.g., TPE,KHH)"),
+    seg1_dates: str = typer.Option("2026-02-05,2026-02-05", "--seg1-dates", help="Date range for segment 1 (origin->stopover1) as START,END"),
+    seg2_dates: str = typer.Option("2026-02-10,2026-02-10", "--seg2-dates", help="Date range for segment 2 (stopover1->stopover2) as START,END"),
+    seg3_dates: str = typer.Option("2026-02-21,2026-02-21", "--seg3-dates", help="Date range for segment 3 (stopover2->stopover1) as START,END"),
+    seg4_dates: str = typer.Option("2026-02-26,2026-02-26", "--seg4-dates", help="Date range for segment 4 (stopover1->origin) as START,END"),
+    min_stopover1_days: int = typer.Option(4, "--min-stopover1-days", help="Minimum days at first stopover"),
+    min_stopover2_days: int = typer.Option(10, "--min-stopover2-days", help="Minimum days at second stopover"),
+    top_n: int = typer.Option(10, "--top-n", help="Number of top results to return"),
+    output: str = typer.Option("trip_results.json", "--output", help="Output JSON file"),
+    headless: bool = typer.Option(True, "--headless/--no-headless", help="Run browser in headless mode"),
+    delay: int = typer.Option(2, "--delay", help="Delay between requests in seconds")
+):
+    """
+    Find optimal multi-segment flight combinations.
+    
+    \b
+    Examples:
+      # London -> Hong Kong -> Taiwan -> Hong Kong -> London
+      python trip_finder.py --origins LHR --stopover1 HKG --stopover2 TPE
+      
+      # Multiple airports
+      python trip_finder.py --origins LHR,LGW --stopover1 HKG,MFM --stopover2 TPE,KHH
+      
+      # New York -> Dubai -> Singapore
+      python trip_finder.py --origins JFK,EWR --stopover1 DXB --stopover2 SIN --min-stopover1-days 3
+    """
+    asyncio.run(run_search(
+        origins, stopover1, stopover2,
+        seg1_dates, seg2_dates, seg3_dates, seg4_dates,
+        min_stopover1_days, min_stopover2_days,
+        top_n, output, headless, delay
+    ))
 
 
-async def main():
-    """Main execution - search flights and find optimal combinations"""
-
-    # Parse command-line arguments
-    args = parse_args()
-
+async def run_search(
+    origins: str, stopover1: str, stopover2: str,
+    seg1_dates: str, seg2_dates: str, seg3_dates: str, seg4_dates: str,
+    min_stopover1_days: int, min_stopover2_days: int,
+    top_n: int, output: str, headless: bool, delay: int
+):
+    """Async function to perform the search and optimization"""
+    
     # Parse airports
-    origins = [a.strip().upper() for a in args.origins.split(',')]
-    stopover1_airports = [a.strip().upper() for a in args.stopover1.split(',')]
-    stopover2_airports = [a.strip().upper() for a in args.stopover2.split(',')]
+    origins_list = [a.strip().upper() for a in origins.split(',')]
+    stopover1_airports = [a.strip().upper() for a in stopover1.split(',')]
+    stopover2_airports = [a.strip().upper() for a in stopover2.split(',')]
 
     # Parse date ranges
-    seg1_start, seg1_end = args.seg1_dates.split(',')
-    seg2_start, seg2_end = args.seg2_dates.split(',')
-    seg3_start, seg3_end = args.seg3_dates.split(',')
-    seg4_start, seg4_end = args.seg4_dates.split(',')
+    seg1_start, seg1_end = seg1_dates.split(',')
+    seg2_start, seg2_end = seg2_dates.split(',')
+    seg3_start, seg3_end = seg3_dates.split(',')
+    seg4_start, seg4_end = seg4_dates.split(',')
 
     print("=" * 80)
     print("FLIGHT TRIP FINDER: Multi-Segment Route Optimization")
     print("=" * 80)
     print(f"\nRoute:")
-    print(f"  {','.join(origins)} → {','.join(stopover1_airports)} → {','.join(stopover2_airports)} → {','.join(stopover1_airports)} → {','.join(origins)}")
+    print(f"  {','.join(origins_list)} → {','.join(stopover1_airports)} → {','.join(stopover2_airports)} → {','.join(stopover1_airports)} → {','.join(origins_list)}")
     print(f"\nConstraints:")
-    print(f"  - Minimum {args.min_stopover1_days} days at stopover 1")
-    print(f"  - Minimum {args.min_stopover2_days} days at stopover 2")
+    print(f"  - Minimum {min_stopover1_days} days at stopover 1")
+    print(f"  - Minimum {min_stopover2_days} days at stopover 2")
     print(f"\nDate Ranges:")
     print(f"  Segment 1: {seg1_start} to {seg1_end}")
     print(f"  Segment 2: {seg2_start} to {seg2_end}")
@@ -166,23 +150,23 @@ async def main():
 
     # Initialize optimizer
     optimizer = TripOptimizer(
-        min_stopover1_days=args.min_stopover1_days,
-        min_stopover2_days=args.min_stopover2_days
+        min_stopover1_days=min_stopover1_days,
+        min_stopover2_days=min_stopover2_days
     )
 
     # Create scraper
-    async with GoogleFlightsScraper(headless=args.headless, delay=args.delay) as scraper:
+    async with GoogleFlightsScraper(headless=headless, delay=delay) as scraper:
 
         # Segment 1: Origin -> Stopover 1
         print("\n" + "=" * 80)
         print("SEGMENT 1: Origin -> Stopover 1")
         print("=" * 80)
         seg1_flights = []
-        for origin in origins:
-            for stopover1 in stopover1_airports:
-                print(f"\nSearching {origin} -> {stopover1} ({seg1_start} to {seg1_end})...")
+        for origin in origins_list:
+            for stopover1_airport in stopover1_airports:
+                print(f"\nSearching {origin} -> {stopover1_airport} ({seg1_start} to {seg1_end})...")
                 flights = await scraper.search_date_range(
-                    origin, stopover1, seg1_start, seg1_end
+                    origin, stopover1_airport, seg1_start, seg1_end
                 )
                 seg1_flights.extend(flights)
                 print(f"  Found {len(flights)} flights")
@@ -193,11 +177,11 @@ async def main():
         print("SEGMENT 2: Stopover 1 -> Stopover 2")
         print("=" * 80)
         seg2_flights = []
-        for stopover1 in stopover1_airports:
-            for stopover2 in stopover2_airports:
-                print(f"\nSearching {stopover1} -> {stopover2} ({seg2_start} to {seg2_end})...")
+        for stopover1_airport in stopover1_airports:
+            for stopover2_airport in stopover2_airports:
+                print(f"\nSearching {stopover1_airport} -> {stopover2_airport} ({seg2_start} to {seg2_end})...")
                 flights = await scraper.search_date_range(
-                    stopover1, stopover2, seg2_start, seg2_end
+                    stopover1_airport, stopover2_airport, seg2_start, seg2_end
                 )
                 seg2_flights.extend(flights)
                 print(f"  Found {len(flights)} flights")
@@ -208,11 +192,11 @@ async def main():
         print("SEGMENT 3: Stopover 2 -> Stopover 1")
         print("=" * 80)
         seg3_flights = []
-        for stopover2 in stopover2_airports:
-            for stopover1 in stopover1_airports:
-                print(f"\nSearching {stopover2} -> {stopover1} ({seg3_start} to {seg3_end})...")
+        for stopover2_airport in stopover2_airports:
+            for stopover1_airport in stopover1_airports:
+                print(f"\nSearching {stopover2_airport} -> {stopover1_airport} ({seg3_start} to {seg3_end})...")
                 flights = await scraper.search_date_range(
-                    stopover2, stopover1, seg3_start, seg3_end
+                    stopover2_airport, stopover1_airport, seg3_start, seg3_end
                 )
                 seg3_flights.extend(flights)
                 print(f"  Found {len(flights)} flights")
@@ -223,11 +207,11 @@ async def main():
         print("SEGMENT 4: Stopover 1 -> Origin")
         print("=" * 80)
         seg4_flights = []
-        for stopover1 in stopover1_airports:
-            for origin in origins:
-                print(f"\nSearching {stopover1} -> {origin} ({seg4_start} to {seg4_end})...")
+        for stopover1_airport in stopover1_airports:
+            for origin in origins_list:
+                print(f"\nSearching {stopover1_airport} -> {origin} ({seg4_start} to {seg4_end})...")
                 flights = await scraper.search_date_range(
-                    stopover1, origin, seg4_start, seg4_end
+                    stopover1_airport, origin, seg4_start, seg4_end
                 )
                 seg4_flights.extend(flights)
                 print(f"  Found {len(flights)} flights")
@@ -244,7 +228,7 @@ async def main():
         return
 
     best_combos = optimizer.find_best_combinations(
-        seg1_flights, seg2_flights, seg3_flights, seg4_flights, top_n=args.top_n
+        seg1_flights, seg2_flights, seg3_flights, seg4_flights, top_n=top_n
     )
 
     # Display results
@@ -376,13 +360,13 @@ async def main():
             }
         })
 
-    with open(args.output, "w") as f:
+    with open(output, "w") as f:
         json.dump(results, f, indent=2)
 
     print(f"\n\n{'='*80}")
-    print(f"✓ Results saved to {args.output}")
+    print(f"✓ Results saved to {output}")
     print("=" * 80)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    app()

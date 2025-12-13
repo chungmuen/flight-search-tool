@@ -6,6 +6,12 @@ Automated tool to find the cheapest multi-segment flight combinations with two s
 
 ## Features
 
+- **Modern CLI with Typer**:
+  - Rich, user-friendly command-line interface
+  - Automatic help generation with formatted output
+  - Type-safe parameter validation
+  - Shell completion support (bash, zsh, fish, PowerShell)
+  - Clear error messages and input validation
 - **Flexible Multi-Segment Search**:
   - Configure any origin, stopover 1, and stopover 2 locations via command-line
   - Search multiple airports per location (e.g., all London airports, all NYC airports)
@@ -39,6 +45,26 @@ playwright install chromium
 ```
 
 This downloads the Chromium browser needed for web scraping.
+
+### 3. (Optional) Enable Shell Completion
+
+Typer provides automatic shell completion. To install it:
+
+```bash
+# For bash
+python trip_finder.py --install-completion bash
+
+# For zsh
+python trip_finder.py --install-completion zsh
+
+# For fish
+python trip_finder.py --install-completion fish
+
+# For PowerShell
+python trip_finder.py --install-completion powershell
+```
+
+After installation, restart your shell to enable tab completion for all parameters.
 
 ## Usage
 
@@ -97,13 +123,16 @@ python trip_finder.py \
 
 **Available parameters:**
 
+For a complete list of parameters with descriptions, run:
+
 ```bash
 python trip_finder.py --help
 ```
 
-- `--origins` - Origin airport codes (comma-separated)
-- `--stopover1` - First stopover airport codes (comma-separated)
-- `--stopover2` - Second stopover airport codes (comma-separated)
+Key parameters:
+- `--origins` - Origin airport codes (comma-separated) **[required]**
+- `--stopover1` - First stopover airport codes (comma-separated) **[required]**
+- `--stopover2` - Second stopover airport codes (comma-separated) **[required]**
 - `--seg1-dates` - Date range for origin→stopover1 (START,END format)
 - `--seg2-dates` - Date range for stopover1→stopover2
 - `--seg3-dates` - Date range for stopover2→stopover1
@@ -113,7 +142,7 @@ python trip_finder.py --help
 - `--top-n` - Number of results to return (default: 10)
 - `--output` - Output JSON filename (default: trip_results.json)
 - `--delay` - Delay between requests in seconds (default: 2)
-- `--headless` - Run browser in headless mode
+- `--headless` / `--no-headless` - Run browser in headless mode (default: headless)
 
 ### Google Flights Scraper (Standalone)
 
@@ -178,6 +207,17 @@ python trip_finder_roundtrip.py \
 - Often cheaper than booking 4 separate one-way flights
 - Validates minimum stay requirements at each stopover (default: 4 days at stopover 1, 10 days at stopover 2)
 
+**Available parameters:**
+
+Run `python trip_finder_roundtrip.py --help` for complete documentation. Key parameters:
+- `--origins`, `--stopover1`, `--stopover2` - Airport codes **[required]**
+- `--rt1-outbound`, `--rt1-return` - Single dates for RT1
+- `--rt2-outbound`, `--rt2-return` - Single dates for RT2
+- `--rt1-outbound-dates`, `--rt1-return-dates` - Multiple dates for RT1 (comma-separated)
+- `--rt2-outbound-dates`, `--rt2-return-dates` - Multiple dates for RT2 (comma-separated)
+- `--min-stopover1-days`, `--min-stopover2-days` - Minimum stay requirements
+- `--headless` / `--no-headless` - Browser display mode
+
 ## Development History
 
 ### Initial Approach: Amadeus API
@@ -197,15 +237,24 @@ python trip_finder_roundtrip.py \
 
 ### Trip Optimizer Integration
 - Combined Google Flights scraping with trip optimization logic.
-- Supports multi-segment searches:
-  - London → Hong Kong area
-  - Hong Kong area → Taiwan
-  - Taiwan → Hong Kong area
-  - Hong Kong area → London
+- Supports fully parameterized multi-segment searches for any route.
+- Two search modes:
+  - **One-way finder**: 4 separate one-way flights (max flexibility)
+  - **Round-trip finder**: 2 round trips (often cheaper)
 - Validates constraints:
-  - Minimum 4 days in China.
-  - Minimum 10 days in Taiwan.
-- Outputs top 10 cheapest valid combinations to `trip_results.json`.
+  - Customizable minimum stay requirements at each stopover.
+  - Chronological date validation.
+- Outputs top N cheapest valid combinations to JSON.
+
+### Modern CLI with Typer
+- Migrated from argparse to Typer for improved user experience.
+- Features:
+  - Rich formatted help output with tables and colors.
+  - Type-safe parameter validation.
+  - Shell completion support for all major shells.
+  - Boolean flags with `--flag/--no-flag` syntax.
+  - Automatic required parameter enforcement.
+- Comprehensive unit tests (28 tests) covering scrapers and optimizers.
 
 ## Example Output
 
@@ -222,28 +271,40 @@ python trip_finder_roundtrip.py \
 
 ## Notes
 
-- The free Amadeus API tier has rate limits (check their documentation).
-- Searches can take several minutes depending on date ranges.
-- Results are from the test API environment (may not reflect real prices).
-- For production use, switch to production API credentials.
-- Consider adding delays between API calls to avoid rate limiting.
+- Searches can take several minutes depending on the number of airports and date ranges.
+- Results are scraped from Google Flights and reflect real-time prices.
+- Use `--delay` parameter to adjust wait time between requests (default: 2 seconds).
+- Headless mode is enabled by default; use `--no-headless` to see the browser.
+- All times and prices are as displayed on Google Flights at the time of search.
+
+## Testing
+
+The project includes comprehensive unit tests:
+
+```bash
+# Run all tests
+python -m unittest discover tests -v
+
+# Run specific test files
+python -m unittest tests.test_google_flights_scraper
+python -m unittest tests.test_trip_optimizer
+python -m unittest tests.test_roundtrip_optimizer
+```
 
 ## Troubleshooting
 
-**Error: "Please set AMADEUS_API_KEY..."**
-- Make sure environment variables are set correctly.
-- Restart your terminal after setting variables.
-
-**Error: "401 Unauthorized"**
-- Verify your API credentials are correct.
-- Check if your API key has expired.
-
 **No results found**
+- Verify airport codes are correct (use IATA codes like LHR, JFK, HKG).
+- Check that dates are in the future.
 - Try wider date ranges.
-- Check if airport codes are correct.
-- Verify dates are in the future.
+- Ensure there are actual flights on those routes.
 
-**Rate limit errors**
-- Add delays: `time.sleep(1)` between searches.
-- Reduce date ranges.
-- Consider upgrading API tier.
+**Browser/Playwright errors**
+- Make sure Playwright browsers are installed: `playwright install chromium`
+- Try running with `--no-headless` to see what's happening.
+- Check your internet connection.
+
+**Scraping errors**
+- Google Flights may have updated their layout; the scraper may need updates.
+- Try increasing `--delay` to give pages more time to load.
+- Check if you're being rate-limited (try longer delays).
