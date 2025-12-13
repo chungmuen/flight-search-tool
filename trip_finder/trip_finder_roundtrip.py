@@ -103,7 +103,7 @@ class RoundTripOptimizer:
 def search(
     origins: str = typer.Option(..., "--origins", help="Comma-separated list of origin airport codes"),
     stopover1: str = typer.Option(..., "--stopover1", help="Comma-separated list of first stopover airport codes"),
-    stopover2: str = typer.Option(..., "--stopover2", help="Comma-separated list of second stopover airport codes"),
+    stopover2: Optional[str] = typer.Option(None, "--stopover2", help="Comma-separated list of second stopover airport codes (optional)"),
     rt1_outbound: Optional[str] = typer.Option(None, "--rt1-outbound", help="Single outbound date for RT1 (YYYY-MM-DD)"),
     rt1_return: Optional[str] = typer.Option(None, "--rt1-return", help="Single return date for RT1 (YYYY-MM-DD)"),
     rt1_outbound_dates: Optional[str] = typer.Option(None, "--rt1-outbound-dates", help="Multiple outbound dates for RT1 (comma-separated)"),
@@ -113,7 +113,7 @@ def search(
     rt2_outbound_dates: Optional[str] = typer.Option(None, "--rt2-outbound-dates", help="Multiple outbound dates for RT2 (comma-separated)"),
     rt2_return_dates: Optional[str] = typer.Option(None, "--rt2-return-dates", help="Multiple return dates for RT2 (comma-separated)"),
     min_stopover1_days: int = typer.Option(4, "--min-stopover1-days", help="Minimum days at first stopover"),
-    min_stopover2_days: int = typer.Option(10, "--min-stopover2-days", help="Minimum days at second stopover"),
+    min_stopover2_days: int = typer.Option(10, "--min-stopover2-days", help="Minimum days at second stopover (ignored if stopover2 is not provided)"),
     top_n: int = typer.Option(10, "--top-n", help="Number of top results to return"),
     output: str = typer.Option("trip_results_roundtrip.json", "--output", help="Output JSON file"),
     headless: bool = typer.Option(True, "--headless/--no-headless", help="Run browser in headless mode"),
@@ -121,6 +121,7 @@ def search(
 ):
     """
     Find optimal round-trip flight combinations.
+    Supports single or double stopovers.
     
     \b
     Examples:
@@ -144,7 +145,7 @@ def search(
 
 
 async def run_search(
-    origins: str, stopover1: str, stopover2: str,
+    origins: str, stopover1: str, stopover2: Optional[str],
     rt1_outbound: Optional[str], rt1_return: Optional[str],
     rt1_outbound_dates: Optional[str], rt1_return_dates: Optional[str],
     rt2_outbound: Optional[str], rt2_return: Optional[str],
@@ -157,7 +158,7 @@ async def run_search(
     # Parse airports
     origins_list = [a.strip().upper() for a in origins.split(',')]
     stopover1_airports = [a.strip().upper() for a in stopover1.split(',')]
-    stopover2_airports = [a.strip().upper() for a in stopover2.split(',')]
+    stopover2_airports = [a.strip().upper() for a in stopover2.split(',')] if stopover2 else []
 
     # Parse dates for RT1
     if rt1_outbound:
@@ -174,30 +175,33 @@ async def run_search(
     else:
         rt1_return_date_list = ["2026-02-26"]
 
-    # Parse dates for RT2
-    if rt2_outbound:
-        rt2_outbound_date_list = [rt2_outbound]
-    elif rt2_outbound_dates:
-        rt2_outbound_date_list = [d.strip() for d in rt2_outbound_dates.split(',')]
-    else:
-        rt2_outbound_date_list = ["2026-02-10"]
+    # Parse dates for RT2 (if stopover2 is provided)
+    if stopover2:
+        if rt2_outbound:
+            rt2_outbound_date_list = [rt2_outbound]
+        elif rt2_outbound_dates:
+            rt2_outbound_date_list = [d.strip() for d in rt2_outbound_dates.split(',')]
+        else:
+            rt2_outbound_date_list = ["2026-02-10"]
 
-    if rt2_return:
-        rt2_return_date_list = [rt2_return]
-    elif rt2_return_dates:
-        rt2_return_date_list = [d.strip() for d in rt2_return_dates.split(',')]
-    else:
-        rt2_return_date_list = ["2026-02-21"]
+        if rt2_return:
+            rt2_return_date_list = [rt2_return]
+        elif rt2_return_dates:
+            rt2_return_date_list = [d.strip() for d in rt2_return_dates.split(',')]
+        else:
+            rt2_return_date_list = ["2026-02-21"]
 
     print("=" * 80)
     print("ROUND-TRIP FLIGHT FINDER: Multi-Segment Route Optimization")
     print("=" * 80)
     print(f"\nRoute:")
     print(f"  Round Trip 1: {','.join(origins_list)} ↔ {','.join(stopover1_airports)}")
-    print(f"  Round Trip 2: {','.join(stopover1_airports)} ↔ {','.join(stopover2_airports)}")
+    if stopover2:
+        print(f"  Round Trip 2: {','.join(stopover1_airports)} ↔ {','.join(stopover2_airports)}")
     print(f"\nConstraints:")
     print(f"  - Minimum {min_stopover1_days} days at stopover 1")
-    print(f"  - Minimum {min_stopover2_days} days at stopover 2")
+    if stopover2:
+        print(f"  - Minimum {min_stopover2_days} days at stopover 2")
     print(f"\nSearch Strategy:")
     print(f"  - Searching round-trip fares (often cheaper than one-ways)")
     print()
@@ -205,7 +209,7 @@ async def run_search(
     # Initialize optimizer
     optimizer = RoundTripOptimizer(
         min_stopover1_days=min_stopover1_days,
-        min_stopover2_days=min_stopover2_days
+        min_stopover2_days=min_stopover2_days if stopover2 else 0
     )
 
     # Create scraper
@@ -232,40 +236,49 @@ async def run_search(
 
         print(f"\n✓ Total Round Trip 1 options: {len(rt1_roundtrips)}")
 
-        # Round Trip 2: Stopover 1 ↔ Stopover 2
-        print("\n" + "=" * 80)
-        print("ROUND TRIP 2: Stopover 1 ↔ Stopover 2")
-        print("=" * 80)
-        rt2_roundtrips = []
+        # Round Trip 2: Stopover 1 ↔ Stopover 2 (if stopover2 is provided)
+        if stopover2:
+            print("\n" + "=" * 80)
+            print("ROUND TRIP 2: Stopover 1 ↔ Stopover 2")
+            print("=" * 80)
+            rt2_roundtrips = []
 
-        for stopover1_airport in stopover1_airports:
-            for stopover2_airport in stopover2_airports:
-                for outbound_date in rt2_outbound_date_list:
-                    for return_date in rt2_return_date_list:
-                        if return_date > outbound_date:
-                            print(f"\nSearching {stopover1_airport} ↔ {stopover2_airport}")
-                            print(f"  Out: {outbound_date}, Return: {return_date}")
-                            roundtrips = await scraper.search_roundtrip(
-                                stopover1_airport, stopover2_airport, outbound_date, return_date
-                            )
-                            rt2_roundtrips.extend(roundtrips)
-                            print(f"  Found {len(roundtrips)} round-trip options")
+            for stopover1_airport in stopover1_airports:
+                for stopover2_airport in stopover2_airports:
+                    for outbound_date in rt2_outbound_date_list:
+                        for return_date in rt2_return_date_list:
+                            if return_date > outbound_date:
+                                print(f"\nSearching {stopover1_airport} ↔ {stopover2_airport}")
+                                print(f"  Out: {outbound_date}, Return: {return_date}")
+                                roundtrips = await scraper.search_roundtrip(
+                                    stopover1_airport, stopover2_airport, outbound_date, return_date
+                                )
+                                rt2_roundtrips.extend(roundtrips)
+                                print(f"  Found {len(roundtrips)} round-trip options")
 
-        print(f"\n✓ Total Round Trip 2 options: {len(rt2_roundtrips)}")
+            print(f"\n✓ Total Round Trip 2 options: {len(rt2_roundtrips)}")
 
     # Find best combinations
     print("\n" + "=" * 80)
     print("FINDING OPTIMAL ROUND-TRIP COMBINATIONS")
     print("=" * 80)
 
-    if not all([rt1_roundtrips, rt2_roundtrips]):
-        print("\n❌ ERROR: Not enough round-trip flights found")
-        print("   Cannot proceed with optimization")
-        return
+    if stopover2:
+        if not all([rt1_roundtrips, rt2_roundtrips]):
+            print("\n❌ ERROR: Not enough round-trip flights found")
+            print("   Cannot proceed with optimization")
+            return
 
-    best_combos = optimizer.find_best_combinations(
-        rt1_roundtrips, rt2_roundtrips, top_n=top_n
-    )
+        best_combos = optimizer.find_best_combinations(
+            rt1_roundtrips, rt2_roundtrips, top_n=top_n
+        )
+    else:
+        if not rt1_roundtrips:
+            print("\n❌ ERROR: Not enough round-trip flights found")
+            print("   Cannot proceed with optimization")
+            return
+
+        best_combos = [(rt1, None, rt1.total_price) for rt1 in rt1_roundtrips[:top_n]]
 
     # Display results
     if not best_combos:
@@ -284,12 +297,12 @@ async def run_search(
 
         # Calculate stays
         rt1_outbound = datetime.strptime(rt1.outbound_date, "%Y-%m-%d")
-        rt2_outbound = datetime.strptime(rt2.outbound_date, "%Y-%m-%d")
-        rt2_return = datetime.strptime(rt2.return_date, "%Y-%m-%d")
+        rt2_outbound = datetime.strptime(rt2.outbound_date, "%Y-%m-%d") if rt2 else None
+        rt2_return = datetime.strptime(rt2.return_date, "%Y-%m-%d") if rt2 else None
         rt1_return = datetime.strptime(rt1.return_date, "%Y-%m-%d")
 
-        stopover1_days = (rt2_outbound - rt1_outbound).days
-        stopover2_days = (rt2_return - rt2_outbound).days
+        stopover1_days = (rt2_outbound - rt1_outbound).days if rt2_outbound else 0
+        stopover2_days = (rt2_return - rt2_outbound).days if rt2_outbound and rt2_return else 0
         total_trip_days = (rt1_return - rt1_outbound).days
 
         print(f"\n🔄 ROUND TRIP 1: ORIGIN ↔ STOPOVER 1 - £{rt1.total_price:.2f}")
@@ -305,38 +318,39 @@ async def run_search(
 
         print(f"\n   📍 STAY AT STOPOVER 1: {stopover1_days} days")
 
-        print(f"\n🔄 ROUND TRIP 2: STOPOVER 1 ↔ STOPOVER 2 - £{rt2.total_price:.2f}")
-        print(f"   Route: {rt2.origin} ↔ {rt2.destination}")
-        print(f"\n   ✈️  OUTBOUND: {rt2.outbound_date}")
-        print(f"      {rt2.outbound_airline}")
-        print(f"      Time: {rt2.outbound_departure_time} → {rt2.outbound_arrival_time}")
-        print(f"      Duration: {rt2.outbound_duration}, Stops: {rt2.outbound_stops}")
-        print(f"\n   ✈️  RETURN: {rt2.return_date}")
-        print(f"      {rt2.return_airline}")
-        print(f"      Time: {rt2.return_departure_time} → {rt2.return_arrival_time}")
-        print(f"      Duration: {rt2.return_duration}, Stops: {rt2.return_stops}")
+        if rt2:
+            print(f"\n🔄 ROUND TRIP 2: STOPOVER 1 ↔ STOPOVER 2 - £{rt2.total_price:.2f}")
+            print(f"   Route: {rt2.origin} ↔ {rt2.destination}")
+            print(f"\n   ✈️  OUTBOUND: {rt2.outbound_date}")
+            print(f"      {rt2.outbound_airline}")
+            print(f"      Time: {rt2.outbound_departure_time} → {rt2.outbound_arrival_time}")
+            print(f"      Duration: {rt2.outbound_duration}, Stops: {rt2.outbound_stops}")
+            print(f"\n   ✈️  RETURN: {rt2.return_date}")
+            print(f"      {rt2.return_airline}")
+            print(f"      Time: {rt2.return_departure_time} → {rt2.return_arrival_time}")
+            print(f"      Duration: {rt2.return_duration}, Stops: {rt2.return_stops}")
 
-        print(f"\n   📍 STAY AT STOPOVER 2: {stopover2_days} days")
+            print(f"\n   📍 STAY AT STOPOVER 2: {stopover2_days} days")
 
         print(f"\n📊 TRIP SUMMARY:")
         print(f"    Total Duration: {total_trip_days} days")
         print(f"    Stopover 1 Stay: {stopover1_days} days")
-        print(f"    Stopover 2 Stay: {stopover2_days} days")
+        print(f"    Stopover 2 Stay: {stopover2_days} days" if stopover2_days > 0 else "")
         print(f"    Total Cost: £{total:.2f}")
 
     # Save results to JSON
     results = []
     for rt1, rt2, total in best_combos:
         rt1_outbound = datetime.strptime(rt1.outbound_date, "%Y-%m-%d")
-        rt2_outbound = datetime.strptime(rt2.outbound_date, "%Y-%m-%d")
-        rt2_return = datetime.strptime(rt2.return_date, "%Y-%m-%d")
+        rt2_outbound = datetime.strptime(rt2.outbound_date, "%Y-%m-%d") if rt2 else None
+        rt2_return = datetime.strptime(rt2.return_date, "%Y-%m-%d") if rt2 else None
         rt1_return = datetime.strptime(rt1.return_date, "%Y-%m-%d")
 
         results.append({
             "total_price": total,
             "total_days": (rt1_return - rt1_outbound).days,
-            "stopover1_days": (rt2_outbound - rt1_outbound).days,
-            "stopover2_days": (rt2_return - rt2_outbound).days,
+            "stopover1_days": (rt2_outbound - rt1_outbound).days if rt2_outbound else 0,
+            "stopover2_days": (rt2_return - rt2_outbound).days if rt2_outbound and rt2_return else 0,
             "roundtrip1_origin_stopover1": {
                 "origin": rt1.origin,
                 "destination": rt1.destination,
@@ -359,24 +373,24 @@ async def run_search(
                 }
             },
             "roundtrip2_stopover1_stopover2": {
-                "origin": rt2.origin,
-                "destination": rt2.destination,
-                "outbound_date": rt2.outbound_date,
-                "return_date": rt2.return_date,
-                "total_price": rt2.total_price,
+                "origin": rt2.origin if rt2 else "",
+                "destination": rt2.destination if rt2 else "",
+                "outbound_date": rt2.outbound_date if rt2 else "",
+                "return_date": rt2.return_date if rt2 else "",
+                "total_price": rt2.total_price if rt2 else 0,
                 "outbound": {
-                    "airline": rt2.outbound_airline,
-                    "departure_time": rt2.outbound_departure_time,
-                    "arrival_time": rt2.outbound_arrival_time,
-                    "duration": rt2.outbound_duration,
-                    "stops": rt2.outbound_stops
+                    "airline": rt2.outbound_airline if rt2 else "",
+                    "departure_time": rt2.outbound_departure_time if rt2 else "",
+                    "arrival_time": rt2.outbound_arrival_time if rt2 else "",
+                    "duration": rt2.outbound_duration if rt2 else "",
+                    "stops": rt2.outbound_stops if rt2 else ""
                 },
                 "return": {
-                    "airline": rt2.return_airline,
-                    "departure_time": rt2.return_departure_time,
-                    "arrival_time": rt2.return_arrival_time,
-                    "duration": rt2.return_duration,
-                    "stops": rt2.return_stops
+                    "airline": rt2.return_airline if rt2 else "",
+                    "departure_time": rt2.return_departure_time if rt2 else "",
+                    "arrival_time": rt2.return_arrival_time if rt2 else "",
+                    "duration": rt2.return_duration if rt2 else "",
+                    "stops": rt2.return_stops if rt2 else ""
                 }
             }
         })
