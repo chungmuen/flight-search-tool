@@ -1,4 +1,4 @@
-![CI](https://github.com/chungmuen/flight-search-tool/actions/workflows/ci.yml/badge.svg)]
+![CI](https://github.com/chungmuen/flight-search-tool/actions/workflows/ci.yml/badge.svg)
 
 # Flight Search Tool
 
