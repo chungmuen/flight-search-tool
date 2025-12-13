@@ -61,3 +61,7 @@ jobs:
         python trip_finder.py --help
         python trip_finder_roundtrip.py --help
         python google_flights_scraper.py --help || true
+
+    - name: Run unit tests
+      run: |
+        python -m unittest discover tests -v
