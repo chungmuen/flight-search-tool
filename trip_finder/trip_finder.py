@@ -29,16 +29,24 @@ class TripOptimizer:
                       seg3_date: Optional[str], seg4_date: Optional[str]) -> bool:
         """Validate that dates meet minimum stay requirements
 
-        For single stopover: seg3_date and seg4_date are None
-        For double stopover: all dates are required
+        Single stopover (2 segments): origin→stopover1→origin
+        - seg1: origin → stopover1
+        - seg2: stopover1 → origin (return)
+        - seg3: None, seg4: None
+
+        Double stopover (3 segments): origin→stopover1→stopover2→origin
+        - seg1: origin → stopover1
+        - seg2: stopover1 → stopover2
+        - seg3: stopover2 → origin (direct return)
+        - seg4: None
         """
 
         date1 = datetime.strptime(seg1_date, "%Y-%m-%d")
         date2 = datetime.strptime(seg2_date, "%Y-%m-%d")
 
-        # Handle single stopover case
-        if seg3_date is None or seg4_date is None:
-            # Single stopover: just check that seg2 > seg1 and minimum stay
+        # Single stopover case (2 segments)
+        if seg3_date is None:
+            # seg1: origin→stopover1, seg2: stopover1→origin
             if not (date1 < date2):
                 return False
 
@@ -48,20 +56,19 @@ class TripOptimizer:
 
             return True
 
-        # Handle double stopover case
+        # Double stopover case (3 segments)
         date3 = datetime.strptime(seg3_date, "%Y-%m-%d")
-        date4 = datetime.strptime(seg4_date, "%Y-%m-%d")
 
-        # Check dates are in correct order
-        if not (date1 < date2 < date3 < date4):
+        # Check dates are in correct order: seg1 < seg2 < seg3
+        if not (date1 < date2 < date3):
             return False
 
-        # Check minimum stopover 1 stay (between segment 1 arrival and segment 2 departure)
+        # Check minimum stopover 1 stay (between arrival at stopover1 and departure to stopover2)
         stopover1_days = (date2 - date1).days
         if stopover1_days < self.min_stopover1_days:
             return False
 
-        # Check minimum stopover 2 stay (between segment 2 arrival and segment 3 departure)
+        # Check minimum stopover 2 stay (between arrival at stopover2 and return home)
         stopover2_days = (date3 - date2).days
         if stopover2_days < self.min_stopover2_days:
             return False
@@ -73,17 +80,17 @@ class TripOptimizer:
                               top_n: int = 10) -> List[Tuple[Flight, Flight, Optional[Flight], Optional[Flight], float]]:
         """Find the cheapest valid flight combinations
 
-        For single stopover: seg3 and seg4 should be empty lists
-        For double stopover: all segments should have flights
+        Single stopover (2 segments): seg1, seg2, empty seg3, empty seg4
+        Double stopover (3 segments): seg1, seg2, seg3, empty seg4
         """
 
         valid_combos = []
 
-        # Handle single stopover case
-        if not seg3 or not seg4:
-            print(f"\nAnalyzing single stopover trips...")
-            print(f"  Segment 1 (outbound): {len(seg1)} flights")
-            print(f"  Segment 2 (return): {len(seg2)} flights")
+        # Single stopover case (2 segments)
+        if not seg3:
+            print(f"\nAnalyzing single stopover trips (2 segments)...")
+            print(f"  Segment 1 (origin→stopover1): {len(seg1)} flights")
+            print(f"  Segment 2 (stopover1→origin): {len(seg2)} flights")
 
             for f1, f2 in product(seg1, seg2):
                 # Check if dates are valid
@@ -97,25 +104,25 @@ class TripOptimizer:
             print(f"✓ Found {len(valid_combos)} valid single stopover trips")
             return valid_combos[:top_n]
 
-        # Handle double stopover case
-        total_combinations = len(seg1) * len(seg2) * len(seg3) * len(seg4)
-        print(f"\nAnalyzing {total_combinations:,} possible combinations...")
-        print(f"  Segment 1: {len(seg1)} flights")
-        print(f"  Segment 2: {len(seg2)} flights")
-        print(f"  Segment 3: {len(seg3)} flights")
-        print(f"  Segment 4: {len(seg4)} flights")
+        # Double stopover case (3 segments)
+        total_combinations = len(seg1) * len(seg2) * len(seg3)
+        print(f"\nAnalyzing double stopover trips (3 segments)...")
+        print(f"  Segment 1 (origin→stopover1): {len(seg1)} flights")
+        print(f"  Segment 2 (stopover1→stopover2): {len(seg2)} flights")
+        print(f"  Segment 3 (stopover2→origin): {len(seg3)} flights")
+        print(f"  Total combinations: {total_combinations:,}")
 
-        for f1, f2, f3, f4 in product(seg1, seg2, seg3, seg4):
+        for f1, f2, f3 in product(seg1, seg2, seg3):
             # Check if dates are valid
             if self.validate_dates(f1.departure_date, f2.departure_date,
-                                  f3.departure_date, f4.departure_date):
-                total_price = f1.price + f2.price + f3.price + f4.price
-                valid_combos.append((f1, f2, f3, f4, total_price))
+                                  f3.departure_date, None):
+                total_price = f1.price + f2.price + f3.price
+                valid_combos.append((f1, f2, f3, None, total_price))
 
         # Sort by total price
         valid_combos.sort(key=lambda x: x[4])
 
-        print(f"✓ Found {len(valid_combos)} valid combinations meeting constraints")
+        print(f"✓ Found {len(valid_combos)} valid double stopover trips")
 
         return valid_combos[:top_n]
 
@@ -142,14 +149,14 @@ def search(
 
     \b
     Examples:
-      # Single stopover: London -> Hong Kong -> London (2 segments)
+      # Single stopover (2 segments): London → Hong Kong → London
       python trip_finder.py --origins LHR --stopover1 HKG \\
         --seg1-dates 2026-02-05,2026-02-05 --seg2-dates 2026-02-15,2026-02-15
 
-      # Double stopover: London -> Hong Kong -> Taiwan -> Hong Kong -> London (4 segments)
+      # Double stopover (3 segments): London → Hong Kong → Taiwan → London
       python trip_finder.py --origins LHR --stopover1 HKG --stopover2 TPE \\
         --seg1-dates 2026-02-05,2026-02-05 --seg2-dates 2026-02-10,2026-02-10 \\
-        --seg3-dates 2026-02-21,2026-02-21 --seg4-dates 2026-02-26,2026-02-26
+        --seg3-dates 2026-02-21,2026-02-21
 
       # Multiple airports with single stopover
       python trip_finder.py --origins LHR,LGW --stopover1 HKG,MFM \\
@@ -196,9 +203,11 @@ async def run_search(
     print("=" * 80)
     print(f"\nRoute:")
     if stopover2:
-        print(f"  {','.join(origins_list)} → {','.join(stopover1_airports)} → {','.join(stopover2_airports)} → {','.join(stopover1_airports)} → {','.join(origins_list)}")
+        print(f"  {','.join(origins_list)} → {','.join(stopover1_airports)} → {','.join(stopover2_airports)} → {','.join(origins_list)}")
+        print(f"  (3 segments: direct return from stopover2 to origin)")
     else:
         print(f"  {','.join(origins_list)} → {','.join(stopover1_airports)} → {','.join(origins_list)}")
+        print(f"  (2 segments: simple round trip)")
     print(f"\nConstraints:")
     print(f"  - Minimum {min_stopover1_days} days at stopover 1")
     if stopover2:
@@ -208,7 +217,6 @@ async def run_search(
     print(f"  Segment 2: {seg2_start} to {seg2_end}")
     if stopover2:
         print(f"  Segment 3: {seg3_start} to {seg3_end}")
-        print(f"  Segment 4: {seg4_start} to {seg4_end}")
     print()
 
     # Initialize optimizer
@@ -235,7 +243,7 @@ async def run_search(
                 print(f"  Found {len(flights)} flights")
         print(f"\n✓ Total Segment 1 flights: {len(seg1_flights)}")
 
-        # Segment 2: Stopover 1 -> Origin (single) or Stopover 1 -> Stopover 2 (double)
+        # Segment 2: Stopover1 -> Origin (single) or Stopover1 -> Stopover2 (double)
         print("\n" + "=" * 80)
         if stopover2:
             print("SEGMENT 2: Stopover 1 -> Stopover 2")
@@ -265,37 +273,23 @@ async def run_search(
                     print(f"  Found {len(flights)} flights")
         print(f"\n✓ Total Segment 2 flights: {len(seg2_flights)}")
 
-        # Segment 3 & 4: Only for double stopover
+        # Segment 3: Only for double stopover (Stopover2 -> Origin direct)
         seg3_flights = []
-        seg4_flights = []
+        seg4_flights = []  # Not used in new design
         if stopover2:
-            # Segment 3: Stopover 2 -> Stopover 1
+            # Segment 3: Stopover2 -> Origin (direct return)
             print("\n" + "=" * 80)
-            print("SEGMENT 3: Stopover 2 -> Stopover 1")
+            print("SEGMENT 3: Stopover 2 -> Origin (Direct Return)")
             print("=" * 80)
             for stopover2_airport in stopover2_airports:
-                for stopover1_airport in stopover1_airports:
-                    print(f"\nSearching {stopover2_airport} -> {stopover1_airport} ({seg3_start} to {seg3_end})...")
+                for origin in origins_list:
+                    print(f"\nSearching {stopover2_airport} -> {origin} ({seg3_start} to {seg3_end})...")
                     flights = await scraper.search_date_range(
-                        stopover2_airport, stopover1_airport, seg3_start, seg3_end
+                        stopover2_airport, origin, seg3_start, seg3_end
                     )
                     seg3_flights.extend(flights)
                     print(f"  Found {len(flights)} flights")
             print(f"\n✓ Total Segment 3 flights: {len(seg3_flights)}")
-
-            # Segment 4: Stopover 1 -> Origin
-            print("\n" + "=" * 80)
-            print("SEGMENT 4: Stopover 1 -> Origin")
-            print("=" * 80)
-            for stopover1_airport in stopover1_airports:
-                for origin in origins_list:
-                    print(f"\nSearching {stopover1_airport} -> {origin} ({seg4_start} to {seg4_end})...")
-                    flights = await scraper.search_date_range(
-                        stopover1_airport, origin, seg4_start, seg4_end
-                    )
-                    seg4_flights.extend(flights)
-                    print(f"  Found {len(flights)} flights")
-            print(f"\n✓ Total Segment 4 flights: {len(seg4_flights)}")
 
     # Find best combinations
     print("\n" + "=" * 80)
@@ -304,12 +298,12 @@ async def run_search(
 
     # Check if we have flights
     if not seg1_flights or not seg2_flights:
-        print("\n❌ ERROR: Not enough flights found in required segments")
+        print("\n❌ ERROR: Not enough flights found in required segments (seg1, seg2)")
         print("   Cannot proceed with optimization")
         return
 
-    if stopover2 and (not seg3_flights or not seg4_flights):
-        print("\n❌ ERROR: Not enough flights found for stopover2 segments")
+    if stopover2 and not seg3_flights:
+        print("\n❌ ERROR: Not enough flights found for segment 3 (stopover2→origin)")
         print("   Cannot proceed with optimization")
         return
 

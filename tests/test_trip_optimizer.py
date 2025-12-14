@@ -84,8 +84,8 @@ class TestTripOptimizer(unittest.TestCase):
         self.assertFalse(result)
 
     def test_find_best_combinations_simple(self):
-        """Test finding best combinations with simple dataset"""
-        # Create sample flights
+        """Test finding best combinations with simple dataset (3 segments)"""
+        # Double stopover: LHR → HKG → TPE → LHR (3 segments, direct return)
         seg1 = [
             Flight("LHR", "HKG", "2026-02-05", 500.0, "BA", "10:00", "18:00", "12h", 0)
         ]
@@ -93,19 +93,17 @@ class TestTripOptimizer(unittest.TestCase):
             Flight("HKG", "TPE", "2026-02-10", 100.0, "CX", "08:00", "10:00", "2h", 0)
         ]
         seg3 = [
-            Flight("TPE", "HKG", "2026-02-21", 120.0, "CX", "14:00", "16:00", "2h", 0)
+            Flight("TPE", "LHR", "2026-02-21", 600.0, "BA", "14:00", "16:00+1", "14h", 0)
         ]
-        seg4 = [
-            Flight("HKG", "LHR", "2026-02-26", 480.0, "BA", "20:00", "06:00+1", "13h", 0)
-        ]
+        seg4 = []  # Not used in 3-segment pattern
 
         combos = self.optimizer.find_best_combinations(seg1, seg2, seg3, seg4, top_n=10)
 
         self.assertEqual(len(combos), 1)
-        self.assertEqual(combos[0][4], 1200.0)  # Total price
+        self.assertEqual(combos[0][4], 1200.0)  # Total price (500 + 100 + 600)
 
     def test_find_best_combinations_multiple_options(self):
-        """Test finding best combinations with multiple flight options"""
+        """Test finding best combinations with multiple flight options (3 segments)"""
         seg1 = [
             Flight("LHR", "HKG", "2026-02-05", 500.0, "BA", "10:00", "18:00", "12h", 0),
             Flight("LHR", "HKG", "2026-02-06", 450.0, "BA", "10:00", "18:00", "12h", 0),
@@ -115,11 +113,9 @@ class TestTripOptimizer(unittest.TestCase):
             Flight("HKG", "TPE", "2026-02-11", 90.0, "CX", "08:00", "10:00", "2h", 0),
         ]
         seg3 = [
-            Flight("TPE", "HKG", "2026-02-21", 120.0, "CX", "14:00", "16:00", "2h", 0),
+            Flight("TPE", "LHR", "2026-02-21", 600.0, "BA", "14:00", "16:00+1", "14h", 0),
         ]
-        seg4 = [
-            Flight("HKG", "LHR", "2026-02-26", 480.0, "BA", "20:00", "06:00+1", "13h", 0),
-        ]
+        seg4 = []  # Not used in 3-segment pattern
 
         combos = self.optimizer.find_best_combinations(seg1, seg2, seg3, seg4, top_n=10)
 
@@ -133,8 +129,8 @@ class TestTripOptimizer(unittest.TestCase):
         """Test handling of empty flight segments"""
         seg1 = []
         seg2 = [Flight("HKG", "TPE", "2026-02-10", 100.0, "CX", "08:00", "10:00", "2h", 0)]
-        seg3 = [Flight("TPE", "HKG", "2026-02-21", 120.0, "CX", "14:00", "16:00", "2h", 0)]
-        seg4 = [Flight("HKG", "LHR", "2026-02-26", 480.0, "BA", "20:00", "06:00+1", "13h", 0)]
+        seg3 = [Flight("TPE", "LHR", "2026-02-21", 600.0, "BA", "14:00", "16:00+1", "14h", 0)]
+        seg4 = []
 
         combos = self.optimizer.find_best_combinations(seg1, seg2, seg3, seg4, top_n=10)
 

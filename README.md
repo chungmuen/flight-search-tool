@@ -2,7 +2,9 @@
 
 # Flight Search Tool
 
-Automated tool to find the cheapest multi-segment flight combinations with two stopovers. Supports **any route** (e.g., London → Hong Kong → Taiwan → London, NYC → Dubai → Singapore → NYC, etc.).
+Automated tool to find the cheapest multi-segment flight combinations with single or double stopovers. Supports **any route** with flexible segment patterns:
+- **Single stopover** (2 segments): e.g., London → Hong Kong → London
+- **Double stopover** (3 segments): e.g., London → Hong Kong → Taiwan → London (direct return)
 
 ## Features
 
@@ -70,13 +72,23 @@ After installation, restart your shell to enable tab completion for all paramete
 
 ### Multi-Segment Trip Finder (Primary Tool)
 
-The trip finder supports **any** multi-segment route with two stopovers. You specify the airports and constraints via command-line arguments.
+The trip finder supports **any** multi-segment route with single or double stopovers. You specify the airports and constraints via command-line arguments.
 
-**Basic usage (London → Hong Kong → Taiwan → Hong Kong → London):**
+**Single stopover (2 segments: London → Hong Kong → London):**
+
+```bash
+python trip_finder.py --origins LHR --stopover1 HKG \
+  --seg1-dates 2026-02-05,2026-02-05 \
+  --seg2-dates 2026-02-15,2026-02-15
+```
+
+**Double stopover (3 segments: London → Hong Kong → Taiwan → London):**
 
 ```bash
 python trip_finder.py --origins LHR --stopover1 HKG --stopover2 TPE
 ```
+
+Note: With double stopover, you return directly from the second stopover to origin (not back through the first stopover).
 
 **Multiple airports per location:**
 
@@ -89,7 +101,7 @@ python trip_finder.py \
   --min-stopover2-days 10
 ```
 
-**Custom dates and constraints:**
+**Custom dates and constraints (double stopover - 3 segments):**
 
 ```bash
 python trip_finder.py \
@@ -99,14 +111,13 @@ python trip_finder.py \
   --seg1-dates 2026-02-05,2026-02-07 \
   --seg2-dates 2026-02-10,2026-02-12 \
   --seg3-dates 2026-02-21,2026-02-23 \
-  --seg4-dates 2026-02-26,2026-02-28 \
   --min-stopover1-days 5 \
   --min-stopover2-days 10 \
   --top-n 5 \
   --output my_results.json
 ```
 
-**Different route (New York → Dubai → Singapore → Dubai → New York):**
+**Different route (NYC → Dubai → Singapore → NYC - direct return):**
 
 ```bash
 python trip_finder.py \
@@ -117,8 +128,7 @@ python trip_finder.py \
   --min-stopover2-days 7 \
   --seg1-dates 2026-03-01,2026-03-01 \
   --seg2-dates 2026-03-05,2026-03-05 \
-  --seg3-dates 2026-03-13,2026-03-13 \
-  --seg4-dates 2026-03-17,2026-03-17
+  --seg3-dates 2026-03-13,2026-03-13
 ```
 
 **Available parameters:**
@@ -132,17 +142,20 @@ python trip_finder.py --help
 Key parameters:
 - `--origins` - Origin airport codes (comma-separated) **[required]**
 - `--stopover1` - First stopover airport codes (comma-separated) **[required]**
-- `--stopover2` - Second stopover airport codes (comma-separated) **[required]**
+- `--stopover2` - Second stopover airport codes (optional for single stopover)
 - `--seg1-dates` - Date range for origin→stopover1 (START,END format)
-- `--seg2-dates` - Date range for stopover1→stopover2
-- `--seg3-dates` - Date range for stopover2→stopover1
-- `--seg4-dates` - Date range for stopover1→origin
+- `--seg2-dates` - Date range for stopover1→origin (single) or stopover1→stopover2 (double)
+- `--seg3-dates` - Date range for stopover2→origin (double stopover only, direct return)
 - `--min-stopover1-days` - Minimum days at first stopover (default: 4)
 - `--min-stopover2-days` - Minimum days at second stopover (default: 10)
 - `--top-n` - Number of results to return (default: 10)
 - `--output` - Output JSON filename (default: trip_results.json)
 - `--delay` - Delay between requests in seconds (default: 2)
 - `--headless` / `--no-headless` - Run browser in headless mode (default: headless)
+
+**Segment Patterns:**
+- **Single stopover**: 2 segments (origin→stopover1→origin)
+- **Double stopover**: 3 segments (origin→stopover1→stopover2→origin, direct return)
 
 ### Google Flights Scraper (Standalone)
 
@@ -239,8 +252,12 @@ Run `python trip_finder_roundtrip.py --help` for complete documentation. Key par
 - Combined Google Flights scraping with trip optimization logic.
 - Supports fully parameterized multi-segment searches for any route.
 - Two search modes:
-  - **One-way finder**: 4 separate one-way flights (max flexibility)
-  - **Round-trip finder**: 2 round trips (often cheaper)
+  - **One-way finder**: Flexible 2-3 segment trips
+    - Single stopover: 2 segments (origin→stopover1→origin)
+    - Double stopover: 3 segments (origin→stopover1→stopover2→origin, direct return)
+  - **Round-trip finder**: 1-2 round trips (often cheaper)
+    - Single stopover: 1 round trip (origin↔stopover1)
+    - Double stopover: 2 round trips (origin↔stopover1 + stopover1↔stopover2)
 - Validates constraints:
   - Customizable minimum stay requirements at each stopover.
   - Chronological date validation.
