@@ -26,20 +26,26 @@ class RoundTripOptimizer:
         self.min_stopover1_days = min_stopover1_days
         self.min_stopover2_days = min_stopover2_days
 
-    def validate_dates(self, rt1: RoundTripFlight, rt2: RoundTripFlight) -> bool:
+    def validate_dates(self, rt1: RoundTripFlight, rt2: Optional[RoundTripFlight]) -> bool:
         """
         Validate that dates meet minimum stay requirements
 
         Args:
             rt1: Origin ↔ Stopover 1 round trip
-            rt2: Stopover 1 ↔ Stopover 2 round trip
+            rt2: Stopover 1 ↔ Stopover 2 round trip (optional)
 
         Returns:
             True if dates are valid, False otherwise
         """
-        # Parse dates
+        # Parse dates for rt1
         rt1_outbound = datetime.strptime(rt1.outbound_date, "%Y-%m-%d")
         rt1_return = datetime.strptime(rt1.return_date, "%Y-%m-%d")
+
+        if rt2 is None:
+            # If no second round trip, validate only rt1
+            return rt1_outbound < rt1_return
+
+        # Parse dates for rt2
         rt2_outbound = datetime.strptime(rt2.outbound_date, "%Y-%m-%d")
         rt2_return = datetime.strptime(rt2.return_date, "%Y-%m-%d")
 
@@ -71,14 +77,30 @@ class RoundTripOptimizer:
 
         Args:
             rt1_flights: Origin ↔ Stopover 1 round trips
-            rt2_flights: Stopover 1 ↔ Stopover 2 round trips
+            rt2_flights: Stopover 1 ↔ Stopover 2 round trips (empty list for single stopover)
             top_n: Number of top results to return
 
         Returns:
-            List of tuples (rt1, rt2, total_price)
+            List of tuples (rt1, rt2, total_price) where rt2 is None for single stopover
         """
         valid_combos = []
 
+        # Handle single stopover case (no rt2)
+        if not rt2_flights:
+            print(f"\nAnalyzing single stopover trips...")
+            print(f"  Round trip 1: {len(rt1_flights)} options")
+
+            # For single stopover, just return sorted RT1 by price
+            for rt1 in rt1_flights:
+                valid_combos.append((rt1, None, rt1.total_price))
+
+            # Sort by total price
+            valid_combos.sort(key=lambda x: x[2])
+
+            print(f"✓ Found {len(valid_combos)} valid single stopover trips")
+            return valid_combos[:top_n]
+
+        # Handle double stopover case (with rt2)
         total_combinations = len(rt1_flights) * len(rt2_flights)
         print(f"\nAnalyzing {total_combinations:,} possible combinations...")
         print(f"  Round trip 1: {len(rt1_flights)} options")
@@ -122,18 +144,21 @@ def search(
     """
     Find optimal round-trip flight combinations.
     Supports single or double stopovers.
-    
+
     \b
     Examples:
-      # London ↔ Hong Kong + Hong Kong ↔ Taiwan
+      # Single stopover: London ↔ Hong Kong (one round trip)
+      python trip_finder_roundtrip.py --origins LHR --stopover1 HKG \\
+        --rt1-outbound 2026-02-05 --rt1-return 2026-02-15
+
+      # Double stopover: London ↔ Hong Kong + Hong Kong ↔ Taiwan (two round trips)
       python trip_finder_roundtrip.py --origins LHR --stopover1 HKG --stopover2 TPE \\
         --rt1-outbound 2026-02-05 --rt1-return 2026-02-26 \\
         --rt2-outbound 2026-02-10 --rt2-return 2026-02-21
-      
-      # NYC ↔ Dubai + Dubai ↔ Singapore
-      python trip_finder_roundtrip.py --origins JFK --stopover1 DXB --stopover2 SIN \\
-        --rt1-outbound 2026-03-01 --rt1-return 2026-03-17 \\
-        --rt2-outbound 2026-03-05 --rt2-return 2026-03-13
+
+      # NYC ↔ Dubai (single stopover with multiple airports)
+      python trip_finder_roundtrip.py --origins JFK,EWR --stopover1 DXB \\
+        --rt1-outbound 2026-03-01 --rt1-return 2026-03-10
     """
     asyncio.run(run_search(
         origins, stopover1, stopover2,
@@ -263,22 +288,22 @@ async def run_search(
     print("FINDING OPTIMAL ROUND-TRIP COMBINATIONS")
     print("=" * 80)
 
-    if stopover2:
-        if not all([rt1_roundtrips, rt2_roundtrips]):
-            print("\n❌ ERROR: Not enough round-trip flights found")
-            print("   Cannot proceed with optimization")
-            return
+    # Check if we have flights
+    if not rt1_roundtrips:
+        print("\n❌ ERROR: Not enough round-trip flights found for RT1")
+        print("   Cannot proceed with optimization")
+        return
 
-        best_combos = optimizer.find_best_combinations(
-            rt1_roundtrips, rt2_roundtrips, top_n=top_n
-        )
-    else:
-        if not rt1_roundtrips:
-            print("\n❌ ERROR: Not enough round-trip flights found")
-            print("   Cannot proceed with optimization")
-            return
+    if stopover2 and not rt2_roundtrips:
+        print("\n❌ ERROR: Not enough round-trip flights found for RT2")
+        print("   Cannot proceed with optimization")
+        return
 
-        best_combos = [(rt1, None, rt1.total_price) for rt1 in rt1_roundtrips[:top_n]]
+    # Find best combinations (handles both single and double stopover)
+    rt2_list = rt2_roundtrips if stopover2 else []
+    best_combos = optimizer.find_best_combinations(
+        rt1_roundtrips, rt2_list, top_n=top_n
+    )
 
     # Display results
     if not best_combos:

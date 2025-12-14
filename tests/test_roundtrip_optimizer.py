@@ -226,6 +226,40 @@ class TestRoundTripOptimizer(unittest.TestCase):
         # Should return at most 2 results
         self.assertLessEqual(len(combos), 2)
 
+    def test_validate_dates_single_stopover(self):
+        """Test date validation for single stopover trips"""
+        rt1 = RoundTripFlight(
+            origin="LHR", destination="HKG",
+            outbound_date="2026-02-05",
+            return_date="2026-02-26",
+            total_price=1000.0,
+            outbound_airline="BA", return_airline="BA",
+            outbound_departure_time="10:00", outbound_arrival_time="18:00",
+            outbound_duration="12h", outbound_stops=0,
+            return_departure_time="20:00", return_arrival_time="06:00+1",
+            return_duration="13h", return_stops=0
+        )
+
+        # Single stopover trips should be valid without a second round trip
+        result = self.optimizer.validate_dates(rt1, None)
+        self.assertTrue(result)
+
+    def test_find_best_combinations_single_stopover(self):
+        """Test finding best combinations for single stopover trips"""
+        rt1_list = [
+            RoundTripFlight(
+                "LHR", "HKG", "2026-02-05", "2026-02-26", 1000.0,
+                "BA", "BA", "10:00", "18:00", "12h", 0,
+                "20:00", "06:00+1", "13h", 0
+            )
+        ]
+
+        # No second round trip provided
+        combos = self.optimizer.find_best_combinations(rt1_list, [], top_n=10)
+
+        self.assertEqual(len(combos), 1)
+        self.assertEqual(combos[0][2], 1000.0)  # Total price
+
 
 if __name__ == '__main__':
     unittest.main()

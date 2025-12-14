@@ -140,6 +140,34 @@ class TestTripOptimizer(unittest.TestCase):
 
         self.assertEqual(len(combos), 0)
 
+    def test_validate_dates_single_stopover(self):
+        """Test date validation for single stopover trips"""
+        # For single stopover: seg1=outbound, seg2=return, seg3=None, seg4=None
+        result = self.optimizer.validate_dates(
+            seg1_date="2026-02-05",   # Outbound to stopover1
+            seg2_date="2026-02-15",   # Return from stopover1 (10 days at stopover)
+            seg3_date=None,           # No second stopover
+            seg4_date=None            # No fourth segment
+        )
+        self.assertTrue(result)
+
+    def test_find_best_combinations_single_stopover(self):
+        """Test finding best combinations for single stopover trips"""
+        # For single stopover: seg1=outbound, seg2=return, seg3=[], seg4=[]
+        seg1 = [
+            Flight("LHR", "HKG", "2026-02-05", 500.0, "BA", "10:00", "18:00", "12h", 0)
+        ]
+        seg2 = [
+            Flight("HKG", "LHR", "2026-02-15", 480.0, "BA", "20:00", "06:00+1", "13h", 0)
+        ]
+
+        combos = self.optimizer.find_best_combinations(seg1, seg2, [], [], top_n=10)
+
+        self.assertEqual(len(combos), 1)
+        self.assertEqual(combos[0][4], 980.0)  # Total price
+        self.assertIsNone(combos[0][2])  # seg3 should be None
+        self.assertIsNone(combos[0][3])  # seg4 should be None
+
 
 class TestTripOptimizerEdgeCases(unittest.TestCase):
     """Test edge cases and boundary conditions"""
