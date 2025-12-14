@@ -25,6 +25,7 @@ class Flight:
     arrival_time: str
     duration: str
     stops: int
+    url: str = ""  # Google Flights URL for this search
 
     def __repr__(self):
         return f"{self.origin}->{self.destination} on {self.departure_date} (£{self.price:.2f})"
@@ -48,6 +49,7 @@ class RoundTripFlight:
     return_arrival_time: str
     return_duration: str
     return_stops: int
+    url: str = ""  # Google Flights URL for this round-trip search
 
     def __repr__(self):
         return f"{self.origin}↔{self.destination} ({self.outbound_date} to {self.return_date}) £{self.total_price:.2f}"
@@ -191,7 +193,7 @@ class GoogleFlightsScraper:
             print("Results screenshot saved")
 
             # Try to extract flight data
-            flights = await self.extract_flights(page, origin, destination, departure_date)
+            flights = await self.extract_flights(page, origin, destination, departure_date, url)
 
             print(f"Extracted {len(flights)} flights")
 
@@ -209,7 +211,7 @@ class GoogleFlightsScraper:
         finally:
             await page.close()
 
-    async def extract_flights(self, page: Page, origin: str, destination: str, departure_date: str) -> List[Flight]:
+    async def extract_flights(self, page: Page, origin: str, destination: str, departure_date: str, url: str) -> List[Flight]:
         """
         Extract flight data from the Google Flights results page
 
@@ -218,6 +220,7 @@ class GoogleFlightsScraper:
             origin: Origin airport code
             destination: Destination airport code
             departure_date: Departure date
+            url: Google Flights search URL
 
         Returns:
             List of Flight objects
@@ -330,7 +333,8 @@ class GoogleFlightsScraper:
                         departure_time=departure_time,
                         arrival_time=arrival_time,
                         duration=duration,
-                        stops=stops
+                        stops=stops,
+                        url=url
                     )
 
                     if price > 0:  # Only add flights with valid prices
@@ -473,7 +477,7 @@ class GoogleFlightsScraper:
 
             # Extract round-trip flights
             roundtrips = await self.extract_roundtrip_flights(page, origin, destination,
-                                                             outbound_date, return_date)
+                                                             outbound_date, return_date, url)
 
             print(f"Extracted {len(roundtrips)} round-trip flights")
 
@@ -492,7 +496,7 @@ class GoogleFlightsScraper:
             await page.close()
 
     async def extract_roundtrip_flights(self, page: Page, origin: str, destination: str,
-                                       outbound_date: str, return_date: str) -> List[RoundTripFlight]:
+                                       outbound_date: str, return_date: str, url: str) -> List[RoundTripFlight]:
         """
         Extract round-trip flight data from Google Flights results page
 
@@ -502,6 +506,7 @@ class GoogleFlightsScraper:
             destination: Destination airport code
             outbound_date: Outbound date
             return_date: Return date
+            url: Google Flights search URL
 
         Returns:
             List of RoundTripFlight objects
@@ -617,7 +622,8 @@ class GoogleFlightsScraper:
                         return_departure_time=return_departure,
                         return_arrival_time=return_arrival,
                         return_duration=return_duration,
-                        return_stops=return_stops
+                        return_stops=return_stops,
+                        url=url
                     )
 
                     if total_price > 0:
