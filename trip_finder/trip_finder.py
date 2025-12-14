@@ -10,6 +10,7 @@ import typer
 from datetime import datetime, timedelta
 from itertools import product
 from typing import List, Tuple, Optional
+from dataclasses import asdict
 try:
     from .google_flights_scraper import GoogleFlightsScraper, Flight
 except ImportError:
@@ -384,60 +385,24 @@ async def run_search(
         # Calculate days
         seg1_date = datetime.strptime(f1.departure_date, "%Y-%m-%d")
         seg2_date = datetime.strptime(f2.departure_date, "%Y-%m-%d")
-        seg3_date = datetime.strptime(f3.departure_date, "%Y-%m-%d")
-        seg4_date = datetime.strptime(f4.departure_date, "%Y-%m-%d")
+        seg3_date = datetime.strptime(f3.departure_date, "%Y-%m-%d") if f3 else None
+
+        # Build segments dict based on whether it's single or double stopover
+        segments = {
+            "segment1_origin_to_stopover1": asdict(f1),
+            "segment2": asdict(f2)
+        }
+
+        # Add segment 3 if it exists (double stopover)
+        if f3:
+            segments["segment3_stopover2_to_origin"] = asdict(f3)
 
         results.append({
             "total_price": total,
-            "total_days": (seg4_date - seg1_date).days,
+            "total_days": (seg3_date - seg1_date).days if f3 else (seg2_date - seg1_date).days,
             "stopover1_days": (seg2_date - seg1_date).days,
-            "stopover2_days": (seg3_date - seg2_date).days,
-            "segments": {
-                "segment1_origin_to_stopover1": {
-                    "origin": f1.origin,
-                    "destination": f1.destination,
-                    "date": f1.departure_date,
-                    "airline": f1.airline,
-                    "departure_time": f1.departure_time,
-                    "arrival_time": f1.arrival_time,
-                    "duration": f1.duration,
-                    "stops": f1.stops,
-                    "price": f1.price
-                },
-                "segment2_stopover1_to_stopover2": {
-                    "origin": f2.origin,
-                    "destination": f2.destination,
-                    "date": f2.departure_date,
-                    "airline": f2.airline,
-                    "departure_time": f2.departure_time,
-                    "arrival_time": f2.arrival_time,
-                    "duration": f2.duration,
-                    "stops": f2.stops,
-                    "price": f2.price
-                },
-                "segment3_stopover2_to_stopover1": {
-                    "origin": f3.origin,
-                    "destination": f3.destination,
-                    "date": f3.departure_date,
-                    "airline": f3.airline,
-                    "departure_time": f3.departure_time,
-                    "arrival_time": f3.arrival_time,
-                    "duration": f3.duration,
-                    "stops": f3.stops,
-                    "price": f3.price
-                },
-                "segment4_stopover1_to_origin": {
-                    "origin": f4.origin,
-                    "destination": f4.destination,
-                    "date": f4.departure_date,
-                    "airline": f4.airline,
-                    "departure_time": f4.departure_time,
-                    "arrival_time": f4.arrival_time,
-                    "duration": f4.duration,
-                    "stops": f4.stops,
-                    "price": f4.price
-                }
-            }
+            "stopover2_days": (seg3_date - seg2_date).days if f3 else 0,
+            "segments": segments
         })
 
     with open(output, "w") as f:

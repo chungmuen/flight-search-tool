@@ -12,6 +12,8 @@ import typer
 from datetime import datetime, timedelta
 from itertools import product
 from typing import List, Tuple, Optional
+from dataclasses import asdict
+
 app = typer.Typer(help="Find optimal round-trip flight combinations (often cheaper than one-ways)")
 try:
     from .google_flights_scraper import GoogleFlightsScraper, RoundTripFlight
@@ -371,54 +373,19 @@ async def run_search(
         rt2_return = datetime.strptime(rt2.return_date, "%Y-%m-%d") if rt2 else None
         rt1_return = datetime.strptime(rt1.return_date, "%Y-%m-%d")
 
-        results.append({
+        result = {
             "total_price": total,
             "total_days": (rt1_return - rt1_outbound).days,
             "stopover1_days": (rt2_outbound - rt1_outbound).days if rt2_outbound else 0,
             "stopover2_days": (rt2_return - rt2_outbound).days if rt2_outbound and rt2_return else 0,
-            "roundtrip1_origin_stopover1": {
-                "origin": rt1.origin,
-                "destination": rt1.destination,
-                "outbound_date": rt1.outbound_date,
-                "return_date": rt1.return_date,
-                "total_price": rt1.total_price,
-                "outbound": {
-                    "airline": rt1.outbound_airline,
-                    "departure_time": rt1.outbound_departure_time,
-                    "arrival_time": rt1.outbound_arrival_time,
-                    "duration": rt1.outbound_duration,
-                    "stops": rt1.outbound_stops
-                },
-                "return": {
-                    "airline": rt1.return_airline,
-                    "departure_time": rt1.return_departure_time,
-                    "arrival_time": rt1.return_arrival_time,
-                    "duration": rt1.return_duration,
-                    "stops": rt1.return_stops
-                }
-            },
-            "roundtrip2_stopover1_stopover2": {
-                "origin": rt2.origin if rt2 else "",
-                "destination": rt2.destination if rt2 else "",
-                "outbound_date": rt2.outbound_date if rt2 else "",
-                "return_date": rt2.return_date if rt2 else "",
-                "total_price": rt2.total_price if rt2 else 0,
-                "outbound": {
-                    "airline": rt2.outbound_airline if rt2 else "",
-                    "departure_time": rt2.outbound_departure_time if rt2 else "",
-                    "arrival_time": rt2.outbound_arrival_time if rt2 else "",
-                    "duration": rt2.outbound_duration if rt2 else "",
-                    "stops": rt2.outbound_stops if rt2 else ""
-                },
-                "return": {
-                    "airline": rt2.return_airline if rt2 else "",
-                    "departure_time": rt2.return_departure_time if rt2 else "",
-                    "arrival_time": rt2.return_arrival_time if rt2 else "",
-                    "duration": rt2.return_duration if rt2 else "",
-                    "stops": rt2.return_stops if rt2 else ""
-                }
-            }
-        })
+            "roundtrip1_origin_stopover1": asdict(rt1)
+        }
+
+        # Add roundtrip2 if it exists (double stopover)
+        if rt2:
+            result["roundtrip2_stopover1_stopover2"] = asdict(rt2)
+
+        results.append(result)
 
     with open(output, "w") as f:
         json.dump(results, f, indent=2)
