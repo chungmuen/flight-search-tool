@@ -188,10 +188,6 @@ class GoogleFlightsScraper:
             print("Waiting for page to stabilize and results to load...")
             await asyncio.sleep(15)  # Give Google Flights time to process the URL and load results
 
-            # Save screenshot to see what we got
-            await page.screenshot(path="google_flights_results.png")
-            print("Results screenshot saved")
-
             # Try to extract flight data
             flights = await self.extract_flights(page, origin, destination, departure_date, url)
 
