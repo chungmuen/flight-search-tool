@@ -471,10 +471,6 @@ class GoogleFlightsScraper:
             print("Waiting for round-trip results to load...")
             await asyncio.sleep(15)  # Give Google Flights time to load round-trip results
 
-            # Save screenshot
-            await page.screenshot(path="google_flights_roundtrip.png")
-            print("Round-trip results screenshot saved")
-
             # Extract round-trip flights
             roundtrips = await self.extract_roundtrip_flights(page, origin, destination,
                                                              outbound_date, return_date, url)
@@ -500,6 +496,15 @@ class GoogleFlightsScraper:
         """
         Extract round-trip flight data from Google Flights results page
 
+        NOTE: Google Flights shows "starting from" prices for round-trips, not exact prices.
+        We extract departure flight details and approximate prices for fuzzy comparison.
+
+        Strategy:
+        - Extract all visible flight cards with prices
+        - Parse departure flight details (airline, times, duration, stops)
+        - Use "starting from" price for ranking
+        - Return top 3 by price and duration
+
         Args:
             page: Playwright page object with loaded results
             origin: Origin airport code
@@ -509,142 +514,145 @@ class GoogleFlightsScraper:
             url: Google Flights search URL
 
         Returns:
-            List of RoundTripFlight objects
+            List of RoundTripFlight objects (prices are approximate "starting from" prices)
         """
+        import re
         roundtrips = []
 
         try:
-            print("Searching for round-trip result containers...")
+            print("Extracting round-trip flights (with approximate prices)...")
+            await asyncio.sleep(3)  # Let page stabilize
+
+            # Look for ALL divs containing flight-like data
             all_divs = await page.query_selector_all('div')
+            print(f"Scanning {len(all_divs)} divs for flight data...")
 
-            roundtrip_cards = []
+            flight_candidates = []
+
             for div in all_divs:
-                text = await div.inner_text()
-                # Round-trip cards will have price and multiple time patterns
-                has_price = '£' in text and any(char.isdigit() for char in text)
-                has_times = text.count(':') >= 4  # At least 2 times for outbound + 2 for return
-                has_reasonable_length = 100 < len(text) < 1000
+                try:
+                    text = await div.inner_text()
 
-                if has_price and has_times and has_reasonable_length:
-                    if 'stop' in text.lower() or 'nonstop' in text.lower() or 'hr' in text.lower():
-                        roundtrip_cards.append(div)
-                        if len(roundtrip_cards) >= 30:
+                    # Flight cards must have: price (£), time (:), and duration/stops
+                    has_price = '£' in text
+                    has_time = ':' in text and text.count(':') >= 2  # At least dep + arr time
+                    has_flight_info = any(keyword in text.lower() for keyword in ['stop', 'nonstop', 'hr', 'min'])
+                    reasonable_length = 50 < len(text) < 600
+
+                    if has_price and has_time and has_flight_info and reasonable_length:
+                        flight_candidates.append(text)
+
+                        if len(flight_candidates) >= 20:  # Limit for performance
                             break
 
-            print(f"Found {len(roundtrip_cards)} potential round-trip cards")
+                except:
+                    continue
 
-            if not roundtrip_cards:
-                print("No round-trip cards found")
-                html = await page.content()
-                with open("google_flights_roundtrip_debug.html", "w", encoding="utf-8") as f:
-                    f.write(html)
-                print("Saved HTML to google_flights_roundtrip_debug.html for debugging")
+            if not flight_candidates:
+                print("❌ No flights found on page")
                 return []
 
-            import re
-
-            for i, card in enumerate(roundtrip_cards[:20]):
+            # Parse each flight candidate
+            for i, text in enumerate(flight_candidates[:15]):  # Limit to top 15
                 try:
-                    text = await card.inner_text()
-
-                    if i < 3:
-                        print(f"\n--- Round-trip Card {i} text (first 300 chars) ---")
-                        print(text[:300] if len(text) > 300 else text)
-                        print("---")
-
-                    # Extract total price
+                    # Extract price (£ symbol followed by number)
                     price_match = re.search(r'£\s*(\d+(?:,\d{3})*)', text)
-                    total_price = float(price_match.group(1).replace(',', '')) if price_match else 0.0
+                    price = float(price_match.group(1).replace(',', '')) if price_match else 0.0
 
-                    # Extract all times
+                    # Extract times
                     time_pattern = r'(\d{1,2}:\d{2}\s*(?:AM|PM)?)'
                     times = re.findall(time_pattern, text, re.IGNORECASE)
+                    dep_time = times[0] if len(times) > 0 else "00:00"
+                    arr_time = times[1] if len(times) > 1 else "00:00"
 
-                    # Assume first 2 times are outbound, next 2 are return
-                    outbound_departure = times[0] if len(times) > 0 else "00:00"
-                    outbound_arrival = times[1] if len(times) > 1 else "00:00"
-                    return_departure = times[2] if len(times) > 2 else "00:00"
-                    return_arrival = times[3] if len(times) > 3 else "00:00"
+                    # Extract duration
+                    duration_match = re.search(r'(\d+\s*hr?\s*\d*\s*m(?:in)?|\d+h\s*\d*m?)', text, re.IGNORECASE)
+                    duration = duration_match.group(1) if duration_match else "0h"
 
-                    # Extract durations (look for all duration patterns)
-                    duration_pattern = r'(\d+\s*hr?\s*\d*\s*m(?:in)?|\d+h\s*\d*m?)'
-                    durations = re.findall(duration_pattern, text, re.IGNORECASE)
-                    outbound_duration = durations[0] if len(durations) > 0 else "0h"
-                    return_duration = durations[1] if len(durations) > 1 else "0h"
+                    # Extract stops
+                    stops = 0
+                    if 'nonstop' in text.lower() or 'direct' in text.lower():
+                        stops = 0
+                    elif '1 stop' in text.lower():
+                        stops = 1
+                    elif '2 stop' in text.lower():
+                        stops = 2
+                    else:
+                        stops_match = re.search(r'(\d+)\s*stop', text, re.IGNORECASE)
+                        if stops_match:
+                            stops = int(stops_match.group(1))
 
-                    # Extract stops - find all stop mentions
-                    stop_mentions = re.findall(r'(\d+)?\s*(nonstop|direct|stop)', text, re.IGNORECASE)
-                    outbound_stops = 0
-                    return_stops = 0
-
-                    if len(stop_mentions) > 0:
-                        first_stop = stop_mentions[0]
-                        if 'nonstop' in first_stop[1].lower() or 'direct' in first_stop[1].lower():
-                            outbound_stops = 0
-                        elif first_stop[0]:
-                            outbound_stops = int(first_stop[0])
-                        else:
-                            outbound_stops = 1
-
-                    if len(stop_mentions) > 1:
-                        second_stop = stop_mentions[1]
-                        if 'nonstop' in second_stop[1].lower() or 'direct' in second_stop[1].lower():
-                            return_stops = 0
-                        elif second_stop[0]:
-                            return_stops = int(second_stop[0])
-                        else:
-                            return_stops = 1
-
-                    # Extract airlines
+                    # Extract airline (first line that's not a time/price/duration)
                     lines = text.split('\n')
-                    airlines = []
+                    airline = "Unknown"
                     for line in lines:
                         line = line.strip()
                         if line and not re.search(r'\d{1,2}:\d{2}', line) and not '£' in line and not 'hr' in line.lower():
-                            if 2 < len(line) < 50 and not any(x in line.lower() for x in ['select', 'trip', 'flight']):
-                                airlines.append(line)
+                            if 2 < len(line) < 50 and not line.lower() in ['select', 'remove', 'change']:
+                                airline = line
+                                break
 
-                    outbound_airline = airlines[0] if len(airlines) > 0 else "Unknown"
-                    return_airline = airlines[1] if len(airlines) > 1 else airlines[0] if len(airlines) > 0 else "Unknown"
-
-                    roundtrip = RoundTripFlight(
-                        origin=origin,
-                        destination=destination,
-                        outbound_date=outbound_date,
-                        return_date=return_date,
-                        total_price=total_price,
-                        outbound_airline=outbound_airline,
-                        return_airline=return_airline,
-                        outbound_departure_time=outbound_departure,
-                        outbound_arrival_time=outbound_arrival,
-                        outbound_duration=outbound_duration,
-                        outbound_stops=outbound_stops,
-                        return_departure_time=return_departure,
-                        return_arrival_time=return_arrival,
-                        return_duration=return_duration,
-                        return_stops=return_stops,
-                        url=url
-                    )
-
-                    if total_price > 0:
+                    # Only add if we have valid price and time
+                    if price > 0 and dep_time != "00:00":
+                        roundtrip = RoundTripFlight(
+                            origin=origin,
+                            destination=destination,
+                            outbound_date=outbound_date,
+                            return_date=return_date,
+                            total_price=price,  # Approximate "starting from" price
+                            outbound_airline=airline,
+                            return_airline="Various",  # Unknown without clicking
+                            outbound_departure_time=dep_time,
+                            outbound_arrival_time=arr_time,
+                            outbound_duration=duration,
+                            outbound_stops=stops,
+                            return_departure_time="",  # Unknown without clicking
+                            return_arrival_time="",
+                            return_duration="",
+                            return_stops=0,
+                            url=url
+                        )
                         roundtrips.append(roundtrip)
 
                 except Exception as e:
-                    print(f"Error extracting round-trip {i}: {e}")
+                    if i < 3:  # Only print errors for first few
+                        print(f"  Error parsing flight {i}: {e}")
                     continue
 
-            # Deduplicate based on unique key
+            # Deduplicate based on price + departure time + airline
             seen = set()
             unique_roundtrips = []
             for rt in roundtrips:
-                key = (rt.total_price, rt.outbound_departure_time, rt.return_departure_time,
-                       rt.outbound_airline, rt.return_airline)
+                key = (rt.total_price, rt.outbound_departure_time, rt.outbound_airline)
                 if key not in seen:
                     seen.add(key)
                     unique_roundtrips.append(rt)
 
-            print(f"After deduplication: {len(unique_roundtrips)} unique round-trips (was {len(roundtrips)})")
-            return unique_roundtrips
+            # Sort by price first, then by duration (shorter is better)
+            def duration_to_minutes(duration_str):
+                """Convert duration string like '13 hr 30 min' to total minutes"""
+                try:
+                    hours = re.search(r'(\d+)\s*hr?', duration_str, re.IGNORECASE)
+                    mins = re.search(r'(\d+)\s*m(?:in)?', duration_str, re.IGNORECASE)
+                    total = 0
+                    if hours:
+                        total += int(hours.group(1)) * 60
+                    if mins:
+                        total += int(mins.group(1))
+                    return total
+                except:
+                    return 9999  # Large number for invalid durations
+
+            unique_roundtrips.sort(key=lambda rt: (rt.total_price, duration_to_minutes(rt.outbound_duration)))
+
+            # Return top 3
+            top_3 = unique_roundtrips[:3]
+
+            print(f"✓ Extracted {len(top_3)} best round-trip options (prices are approximate)")
+            for i, rt in enumerate(top_3, 1):
+                print(f"  {i}. £{rt.total_price:.0f} - {rt.outbound_airline} {rt.outbound_departure_time} ({rt.outbound_duration})")
+
+            return top_3
 
         except Exception as e:
             print(f"Error in extract_roundtrip_flights: {e}")
