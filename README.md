@@ -131,6 +131,19 @@ python trip_finder.py \
   --seg3-dates 2026-03-13,2026-03-13
 ```
 
+**Using date ranges (also supported in one-way finder):**
+
+```bash
+python trip_finder.py \
+  --origins LHR \
+  --stopover1 HKG \
+  --stopover2 TPE \
+  --seg1-dates 2026-02-05:2026-02-07 \
+  --seg2-dates 2026-02-10:2026-02-12 \
+  --seg3-dates 2026-02-21:2026-02-23
+```
+Date format accepts both `:` for ranges and `,` for individual dates (or mix both).
+
 **Available parameters:**
 
 For a complete list of parameters with descriptions, run:
@@ -143,9 +156,11 @@ Key parameters:
 - `--origins` - Origin airport codes (comma-separated) **[required]**
 - `--stopover1` - First stopover airport codes (comma-separated) **[required]**
 - `--stopover2` - Second stopover airport codes (optional for single stopover)
-- `--seg1-dates` - Date range for origin→stopover1 (START,END format)
+- `--seg1-dates` - Date range for origin→stopover1 (START,END or START:END format)
 - `--seg2-dates` - Date range for stopover1→origin (single) or stopover1→stopover2 (double)
 - `--seg3-dates` - Date range for stopover2→origin (double stopover only, direct return)
+  - Format: `2026-02-05,2026-02-10` (old format, still supported)
+  - Or: `2026-02-05:2026-02-10` (new range format - more intuitive)
 - `--min-stopover1-days` - Minimum days at first stopover (default: 4)
 - `--min-stopover2-days` - Minimum days at second stopover (default: 10)
 - `--top-n` - Number of results to return (default: 10)
@@ -232,6 +247,20 @@ python trip_finder_roundtrip.py \
 ```
 This searches: 2 origins × 2 stopover1 × 3 outbound dates × 2 return dates = 24 RT1 searches, and 2 stopover1 × 2 stopover2 × 2 outbound × 2 return = 16 RT2 searches (40 total searches).
 
+**Using date ranges (convenient for consecutive dates):**
+
+```bash
+python trip_finder_roundtrip.py \
+  --origins LHR \
+  --stopover1 HKG \
+  --stopover2 TPE \
+  --rt1-outbound-dates 2026-02-05:2026-02-07 \
+  --rt1-return-dates 2026-02-25:2026-02-27 \
+  --rt2-outbound-dates 2026-02-10:2026-02-11 \
+  --rt2-return-dates 2026-02-20:2026-02-22
+```
+This expands to: Feb 5,6,7 for outbound (3 dates) × Feb 25,26,27 for return (3 dates) = 9 RT1 searches. You can also mix: `2026-02-05,2026-02-07:2026-02-09` = Feb 5,7,8,9.
+
 **How it works:**
 - Round Trip 1: Origin ↔ Stopover 1 (e.g., London ↔ Hong Kong)
 - Round Trip 2: Stopover 1 ↔ Stopover 2 (e.g., Hong Kong ↔ Taiwan)
@@ -253,8 +282,11 @@ Run `python trip_finder_roundtrip.py --help` for complete documentation. Key par
 - `--stopover2` - Second stopover airport codes (comma-separated: TPE,KHH) [optional]
 - `--rt1-outbound`, `--rt1-return` - Single dates for RT1
 - `--rt2-outbound`, `--rt2-return` - Single dates for RT2
-- `--rt1-outbound-dates`, `--rt1-return-dates` - Multiple dates for RT1 (comma-separated)
-- `--rt2-outbound-dates`, `--rt2-return-dates` - Multiple dates for RT2 (comma-separated)
+- `--rt1-outbound-dates`, `--rt1-return-dates` - Multiple dates for RT1:
+  - Comma-separated: `2026-02-05,2026-02-06,2026-02-07`
+  - Date range: `2026-02-05:2026-02-10` (all dates from 5th to 10th inclusive)
+  - Mixed: `2026-02-05,2026-02-07:2026-02-09`
+- `--rt2-outbound-dates`, `--rt2-return-dates` - Multiple dates for RT2 (same format)
 - `--min-stopover1-days`, `--min-stopover2-days` - Minimum stay requirements
 - `--headless` / `--no-headless` - Browser display mode
 

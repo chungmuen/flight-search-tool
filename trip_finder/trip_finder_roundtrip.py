@@ -21,6 +21,37 @@ except ImportError:
     from google_flights_scraper import GoogleFlightsScraper, RoundTripFlight
 
 
+def parse_date_range(date_string: str) -> List[str]:
+    """
+    Parse date string that can be:
+    - Single date: "2026-02-05"
+    - Comma-separated: "2026-02-05,2026-02-06,2026-02-07"
+    - Range: "2026-02-05:2026-02-10" (inclusive)
+    - Mix: "2026-02-05,2026-02-07:2026-02-09"
+
+    Returns list of date strings in YYYY-MM-DD format
+    """
+    dates = []
+    parts = [p.strip() for p in date_string.split(',')]
+
+    for part in parts:
+        if ':' in part:
+            # Date range
+            start_str, end_str = part.split(':')
+            start_date = datetime.strptime(start_str.strip(), "%Y-%m-%d")
+            end_date = datetime.strptime(end_str.strip(), "%Y-%m-%d")
+
+            current = start_date
+            while current <= end_date:
+                dates.append(current.strftime("%Y-%m-%d"))
+                current += timedelta(days=1)
+        else:
+            # Single date
+            dates.append(part)
+
+    return dates
+
+
 class RoundTripOptimizer:
     """Finds optimal round-trip combinations for multi-segment trips"""
 
@@ -187,18 +218,18 @@ async def run_search(
     stopover1_airports = [a.strip().upper() for a in stopover1.split(',')]
     stopover2_airports = [a.strip().upper() for a in stopover2.split(',')] if stopover2 else []
 
-    # Parse dates for RT1
+    # Parse dates for RT1 (supports ranges like "2026-02-05:2026-02-10")
     if rt1_outbound:
         rt1_outbound_date_list = [rt1_outbound]
     elif rt1_outbound_dates:
-        rt1_outbound_date_list = [d.strip() for d in rt1_outbound_dates.split(',')]
+        rt1_outbound_date_list = parse_date_range(rt1_outbound_dates)
     else:
         rt1_outbound_date_list = ["2026-02-05"]
 
     if rt1_return:
         rt1_return_date_list = [rt1_return]
     elif rt1_return_dates:
-        rt1_return_date_list = [d.strip() for d in rt1_return_dates.split(',')]
+        rt1_return_date_list = parse_date_range(rt1_return_dates)
     else:
         rt1_return_date_list = ["2026-02-26"]
 
@@ -207,14 +238,14 @@ async def run_search(
         if rt2_outbound:
             rt2_outbound_date_list = [rt2_outbound]
         elif rt2_outbound_dates:
-            rt2_outbound_date_list = [d.strip() for d in rt2_outbound_dates.split(',')]
+            rt2_outbound_date_list = parse_date_range(rt2_outbound_dates)
         else:
             rt2_outbound_date_list = ["2026-02-10"]
 
         if rt2_return:
             rt2_return_date_list = [rt2_return]
         elif rt2_return_dates:
-            rt2_return_date_list = [d.strip() for d in rt2_return_dates.split(',')]
+            rt2_return_date_list = parse_date_range(rt2_return_dates)
         else:
             rt2_return_date_list = ["2026-02-21"]
 

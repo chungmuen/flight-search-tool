@@ -19,6 +19,37 @@ except ImportError:
 app = typer.Typer(help="Find optimal multi-segment flight combinations")
 
 
+def parse_date_range(date_string: str) -> List[str]:
+    """
+    Parse date string that can be:
+    - Single date: "2026-02-05"
+    - Comma-separated: "2026-02-05,2026-02-06,2026-02-07"
+    - Range: "2026-02-05:2026-02-10" (inclusive)
+    - Mix: "2026-02-05,2026-02-07:2026-02-09"
+
+    Returns list of date strings in YYYY-MM-DD format
+    """
+    dates = []
+    parts = [p.strip() for p in date_string.split(',')]
+
+    for part in parts:
+        if ':' in part:
+            # Date range
+            start_str, end_str = part.split(':')
+            start_date = datetime.strptime(start_str.strip(), "%Y-%m-%d")
+            end_date = datetime.strptime(end_str.strip(), "%Y-%m-%d")
+
+            current = start_date
+            while current <= end_date:
+                dates.append(current.strftime("%Y-%m-%d"))
+                current += timedelta(days=1)
+        else:
+            # Single date
+            dates.append(part)
+
+    return dates
+
+
 class TripOptimizer:
     """Finds optimal flight combinations for multi-segment trips"""
 
@@ -184,20 +215,27 @@ async def run_search(
     stopover1_airports = [a.strip().upper() for a in stopover1.split(',')]
     stopover2_airports = [a.strip().upper() for a in stopover2.split(',')] if stopover2 else []
 
-    # Parse date ranges
-    seg1_start, seg1_end = seg1_dates.split(',')
-    seg2_start, seg2_end = seg2_dates.split(',')
+    # Parse date ranges (supports both "START,END" and "START:END" formats)
+    def parse_date_param(dates_str):
+        """Parse date parameter - supports both comma and colon separators"""
+        if ':' in dates_str and ',' not in dates_str:
+            # New format: "2026-02-05:2026-02-10"
+            return dates_str.split(':')
+        else:
+            # Old format: "2026-02-05,2026-02-10"
+            return dates_str.split(',')
 
-    # For single stopover, seg3 and seg4 are not required
+    seg1_start, seg1_end = parse_date_param(seg1_dates)
+    seg2_start, seg2_end = parse_date_param(seg2_dates)
+
+    # For single stopover, seg3 is not required (was renamed from seg4)
     if stopover2:
-        if not seg3_dates or not seg4_dates:
-            print("\n❌ ERROR: For double stopover, both --seg3-dates and --seg4-dates are required")
+        if not seg3_dates:
+            print("\n❌ ERROR: For double stopover, --seg3-dates is required")
             return
-        seg3_start, seg3_end = seg3_dates.split(',')
-        seg4_start, seg4_end = seg4_dates.split(',')
+        seg3_start, seg3_end = parse_date_param(seg3_dates)
     else:
         seg3_start = seg3_end = None
-        seg4_start = seg4_end = None
 
     print("=" * 80)
     print("FLIGHT TRIP FINDER: Multi-Segment Route Optimization")
