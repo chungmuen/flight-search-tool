@@ -174,7 +174,7 @@ Searches for 2 round-trip tickets instead of 4 one-way flights (often finds chea
 **⚠️ Important Note About Prices:**
 Round-trip prices are **approximate "starting from" prices** shown on Google Flights initial page. For exact final prices and return flight details, click the Google Flights URL included in the results.
 
-**Basic usage:**
+**Basic usage (single airports):**
 
 ```bash
 python trip_finder_roundtrip.py \
@@ -186,6 +186,20 @@ python trip_finder_roundtrip.py \
   --rt2-outbound 2026-02-10 \
   --rt2-return 2026-02-21
 ```
+
+**Multiple airports (searches all combinations):**
+
+```bash
+python trip_finder_roundtrip.py \
+  --origins LHR,LGW,STN \
+  --stopover1 HKG,MFM,SZX \
+  --stopover2 TPE,KHH \
+  --rt1-outbound 2026-02-05 \
+  --rt1-return 2026-02-26 \
+  --rt2-outbound 2026-02-10 \
+  --rt2-return 2026-02-21
+```
+This searches: 3 origins × 3 stopover1 airports = 9 RT1 combinations, and 3 stopover1 × 2 stopover2 = 6 RT2 combinations.
 
 **With custom minimum stay requirements:**
 
@@ -202,20 +216,21 @@ python trip_finder_roundtrip.py \
   --min-stopover2-days 7
 ```
 
-**Multiple airports and dates:**
+**Multiple airports AND multiple dates:**
 
 ```bash
 python trip_finder_roundtrip.py \
   --origins LHR,LGW \
   --stopover1 HKG,MFM \
   --stopover2 TPE,KHH \
-  --rt1-outbound-dates 2026-02-05,2026-02-06 \
+  --rt1-outbound-dates 2026-02-05,2026-02-06,2026-02-07 \
   --rt1-return-dates 2026-02-25,2026-02-26 \
   --rt2-outbound-dates 2026-02-10,2026-02-11 \
   --rt2-return-dates 2026-02-20,2026-02-21 \
   --min-stopover1-days 5 \
   --min-stopover2-days 12
 ```
+This searches: 2 origins × 2 stopover1 × 3 outbound dates × 2 return dates = 24 RT1 searches, and 2 stopover1 × 2 stopover2 × 2 outbound × 2 return = 16 RT2 searches (40 total searches).
 
 **How it works:**
 - Round Trip 1: Origin ↔ Stopover 1 (e.g., London ↔ Hong Kong)
@@ -233,7 +248,9 @@ python trip_finder_roundtrip.py \
 **Available parameters:**
 
 Run `python trip_finder_roundtrip.py --help` for complete documentation. Key parameters:
-- `--origins`, `--stopover1`, `--stopover2` - Airport codes **[required]**
+- `--origins` - Origin airport codes (comma-separated: LHR,LGW,STN) **[required]**
+- `--stopover1` - First stopover airport codes (comma-separated: HKG,MFM,SZX) **[required]**
+- `--stopover2` - Second stopover airport codes (comma-separated: TPE,KHH) [optional]
 - `--rt1-outbound`, `--rt1-return` - Single dates for RT1
 - `--rt2-outbound`, `--rt2-return` - Single dates for RT2
 - `--rt1-outbound-dates`, `--rt1-return-dates` - Multiple dates for RT1 (comma-separated)
