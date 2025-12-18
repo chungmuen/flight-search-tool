@@ -171,6 +171,9 @@ This runs built-in tests to verify scraping functionality.
 
 Searches for 2 round-trip tickets instead of 4 one-way flights (often finds cheaper prices).
 
+**⚠️ Important Note About Prices:**
+Round-trip prices are **approximate "starting from" prices** shown on Google Flights initial page. For exact final prices and return flight details, click the Google Flights URL included in the results.
+
 **Basic usage:**
 
 ```bash
@@ -220,6 +223,13 @@ python trip_finder_roundtrip.py \
 - Often cheaper than booking 4 separate one-way flights
 - Validates minimum stay requirements at each stopover (default: 4 days at stopover 1, 10 days at stopover 2)
 
+**What you get:**
+- **Outbound flights**: Full details (airline, times, duration, stops)
+- **Return flights**: Marked as "Various" (details available via Google Flights URL)
+- **Prices**: Approximate "starting from" prices for ranking and comparison
+- **Google Flights URL**: Click to see exact return options and final prices
+- **Top 3 options** per search, sorted by price and duration
+
 **Available parameters:**
 
 Run `python trip_finder_roundtrip.py --help` for complete documentation. Key parameters:
@@ -245,6 +255,8 @@ Run `python trip_finder_roundtrip.py --help` for complete documentation. Key par
   - Fully functional scraper using Playwright.
   - Extracts flight details (price, times, airlines, stops) for multi-airport and date range searches.
   - Handles dynamic content and cookie consent dialogs.
+  - **One-way searches**: Full accuracy with exact prices.
+  - **Round-trip searches**: Extracts approximate "starting from" prices and outbound flight details. Google Flights URL provided for exact pricing.
 - **Skyscanner Scraper**:
   - Initial attempt made but paused due to Skyscanner's complex structure.
 
@@ -289,7 +301,8 @@ Run `python trip_finder_roundtrip.py --help` for complete documentation. Key par
 ## Notes
 
 - Searches can take several minutes depending on the number of airports and date ranges.
-- Results are scraped from Google Flights and reflect real-time prices.
+- **One-way finder**: Results are scraped from Google Flights and reflect real-time prices.
+- **Round-trip finder**: Prices are approximate "starting from" prices. Click the Google Flights URL in results for exact final prices.
 - Use `--delay` parameter to adjust wait time between requests (default: 2 seconds).
 - Headless mode is enabled by default; use `--no-headless` to see the browser.
 - All times and prices are as displayed on Google Flights at the time of search.
